@@ -1,2 +1,0 @@
-# ManagemantOrder
-Managemant Order System
