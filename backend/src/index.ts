@@ -2,6 +2,7 @@ import express, { Request, Response } from 'express';
 import dotenv from 'dotenv';
 import cors from 'cors';
 import stockRoutes from './routes/stockRoutes';
+import path from 'path';
 // 👇 1. Import Routes ที่เราสร้างไว้
 import productRoutes from './routes/productRoutes';
 // import orderRoutes from './routes/orderRoutes'; (เอาไว้เปิดใช้ตอนทำระบบออเดอร์)
@@ -24,6 +25,8 @@ app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/stocks', stockRoutes);
 app.use('/api/transactions', transactionRoutes);
+const assetPath = path.resolve(__dirname, '..', 'Asset');
+app.use('/Asset', express.static(assetPath));
 // (อนาคต) เชื่อมต่อ Route ออเดอร์
 // app.use('/api/orders', orderRoutes);
 

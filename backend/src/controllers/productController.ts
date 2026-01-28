@@ -7,10 +7,11 @@ const prisma = new PrismaClient();
 export const getProducts = async (req: Request, res: Response) => {
   try {
     const products = await prisma.product.findMany({
-      orderBy: { id: 'asc' } // แนะนำ: เรียงจาก ID น้อยไปมาก (เมนูจะได้เรียงสวยๆ ตามลำดับที่เพิ่ม)
+      orderBy: { id: 'asc' }
     });
     res.json(products);
   } catch (error) {
+    console.error("🔥 Error Detail:", error); // 👈 เพิ่มบรรทัดนี้ครับ
     res.status(500).json({ error: "Error fetching products" });
   }
 };
