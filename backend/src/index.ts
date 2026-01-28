@@ -6,6 +6,7 @@ import stockRoutes from './routes/stockRoutes';
 import productRoutes from './routes/productRoutes';
 // import orderRoutes from './routes/orderRoutes'; (เอาไว้เปิดใช้ตอนทำระบบออเดอร์)
 import orderRoutes from './routes/orderRoutes'; //
+import transactionRoutes from './routes/transactionRoutes';
 dotenv.config();
 
 const app = express();
@@ -22,6 +23,7 @@ app.use(express.json()); // อ่าน JSON body
 app.use('/api/products', productRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/stocks', stockRoutes);
+app.use('/api/transactions', transactionRoutes);
 // (อนาคต) เชื่อมต่อ Route ออเดอร์
 // app.use('/api/orders', orderRoutes);
 
