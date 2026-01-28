@@ -44,7 +44,7 @@ DB_NAME=management_order
 ```
 ### 3. รันโปรเจกต์ในโหมด Development
 ```bash
-npm run dev
+npx ts-node src/index.ts
 ```
 ---
 ## 🔗 API Endpoints (ตัวอย่างเบื้องต้น)
