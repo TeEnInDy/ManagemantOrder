@@ -1,7 +1,23 @@
 import { Router } from 'express';
-// นำเข้า Controller มาใช้ที่นี่
+import { 
+    createOrder, 
+    getOrders, 
+    getOrderById, 
+    updateOrderStatus 
+} from '../controllers/orderController';
+
 const router = Router();
 
-// router.get('/', getAllOrders);
+// สร้างออเดอร์
+router.post('/', createOrder);
+
+// ดูประวัติทั้งหมด
+router.get('/', getOrders);
+
+// (ใหม่) ดูออเดอร์ตาม ID
+router.get('/:id', getOrderById);
+
+// (ใหม่) แก้ไขสถานะออเดอร์
+router.put('/:id/status', updateOrderStatus);
 
 export default router;
