@@ -12,7 +12,7 @@ app.use(cors()); // อนุญาตให้ Next.js ดึงข้อมู
 app.use(express.json()); // อ่าน body ของ request เป็น JSON
 
 // ตัวอย่าง Route สำหรับดึงออเดอร์
-app.get('/api/orders', (req: Request, res: Response) => {
+app.get('/api/order-history', (req: Request, res: Response) => {
     res.json({ message: "Backend is ready for POS System!" });
 });
 
