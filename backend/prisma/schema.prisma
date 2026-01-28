@@ -100,15 +100,15 @@ model OrderItem {
 
 // ==========================================
 // 💰 5. ตารางบัญชี (Transaction)
-// ใช้สำหรับ: Dashboard คำนวณรายรับ-รายจ่าย
+// เก็บรายรับ-รายจ่าย เพื่อคำนวณกำไร
 // ==========================================
 model Transaction {
-  id          Int             @id @default(autoincrement())
-  type        TransactionType // รายรับ (Income) หรือ รายจ่าย (Expense)
-  category    String          // เช่น Sales, Restock, Salary, Utility
-  amount      Decimal         @db.Decimal(10, 2)
-  description String?         // รายละเอียดเพิ่มเติม
-  createdAt   DateTime        @default(now())
+  id          Int      @id @default(autoincrement())
+  type        String   // "INCOME" (รายรับ) หรือ "EXPENSE" (รายจ่าย)
+  amount      Decimal  @db.Decimal(10, 2)
+  category    String   // เช่น Sales (ขายของ), Stock (ซื้อของ), Utilities (ค่าน้ำไฟ), Salary (เงินเดือน)
+  description String?  // รายละเอียดเพิ่มเติม
+  createdAt   DateTime @default(now())
 }
 
 enum TransactionType {
