@@ -9,109 +9,172 @@ datasource db {
 }
 
 // ==========================================
-// 🛒 1. ตารางสินค้า (Product)
-// ใช้สำหรับ: แสดงเมนูหน้า POS และให้ Bot ดึงไปโชว์
+// 🛒 1. ตารางสินค้า (Product) - เมนูหน้าร้าน
 // ==========================================
 model Product {
   id          Int      @id @default(autoincrement())
   name        String
-  price       Decimal  @db.Decimal(10, 2) // ใช้ Decimal เพื่อความแม่นยำเรื่องเงิน
-  category    String   // เช่น Main, Appetizer, Salad, Drink
+  price       Decimal  @db.Decimal(10, 2)
+  category    String   @default("General") // Main, Drink, Dessert
   description String?  @db.Text
-  image       String?  // URL รูปภาพสินค้า
-  isActive    Boolean  @default(true) // true=ขายปกติ, false=ของหมด/ปิดขายชั่วคราว
+  image       String?
+  isActive    Boolean  @default(true) 
+  
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  // ความสัมพันธ์: สินค้านี้เคยถูกสั่งใน OrderItem ไหนบ้าง
+  // Relations
   orderItems  OrderItem[]
+  ingredients Recipe[]    // 1 เมนู มีส่วนผสมอะไรบ้าง (Link ไป Stock)
+
+  @@index([category, isActive]) // ค้นหาตามหมวดหมู่และสถานะได้เร็ว
 }
 
 // ==========================================
-// 📦 2. ตารางสต็อก (StockItem)
-// ใช้สำหรับ: ระบบ Inventory ตัดสต็อกหลังบ้าน
+// 📦 2. ตารางสต็อก (StockItem) - วัตถุดิบหลังบ้าน
 // ==========================================
 model StockItem {
-  id                Int       @id @default(autoincrement())
-  name              String
-  category          String    // เช่น Raw Material, Seasoning, Packaging
-  quantity          Decimal   @db.Decimal(10, 2) // ทศนิยม 2 ตำแหน่ง
-  unit              String    // kg, bottle, pcs
-  costPerUnit       Decimal   @db.Decimal(10, 2) // ราคาต้นทุน
-  lowStockThreshold Int       @default(5)        // เตือนเมื่อของใกล้หมด
-  
-  // 🔥 เพิ่มใหม่
-  expiryDate        DateTime? // วันหมดอายุ (ใส่ ? แปลว่ามีหรือไม่มีก็ได้ เผื่อพวกทิชชู่/ถุงที่ไม่บูด)
-  supplier          String?   // ซื้อมาจากร้านไหน (เผื่อของหมดจะได้โทรสั่งถูกที่)
+  id                Int      @id @default(autoincrement())
+  name              String    // หมูสับ, กุ้ง, แก้วพลาสติก
+  category          String    @default("Raw Material") 
+  quantity          Decimal   @db.Decimal(10, 2) // ปริมาณคงเหลือ
+  unit              String    // kg, g, ml, pcs
+  costPerUnit       Decimal   @db.Decimal(10, 2) // ต้นทุนต่อหน่วย (Average Cost)
+  lowStockThreshold Int       @default(5) 
 
-  createdAt         DateTime  @default(now())    // วันที่บันทึกข้อมูล
-  updatedAt         DateTime  @updatedAt         // วันที่แก้ไขล่าสุด
+  // ข้อมูลเพิ่มเติม
+  expiryDate        DateTime? 
+  supplier          String?   
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // Relations
+  usedInRecipes     Recipe[]  // วัตถุดิบนี้ถูกใช้ในเมนูไหนบ้าง
+  stockLogs         StockLog[] // ประวัติการเข้า-ออกของสต็อก (เพิ่มใหม่)
 }
 
 // ==========================================
-// 🧾 3. ตารางออเดอร์ (Order) - ส่วนหัวบิล
-// ใช้สำหรับ: เก็บข้อมูลการสั่งซื้อทั้งจาก Web และ Discord
+// 📜 2.2 ตารางประวัติสต็อก (StockLog) - **เพิ่มใหม่**
+// เก็บทุกความเคลื่อนไหว (เข้า/ออก/ทิ้ง/ใช้จริง)
+// ==========================================
+model StockLog {
+  id          Int      @id @default(autoincrement())
+  stockItemId Int
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+  
+  type        StockLogType // USE, WASTE, RESTOCK, ADJUST
+  amount      Decimal      @db.Decimal(10, 2) // ปริมาณที่เปลี่ยนแปลง (เช่น -0.5, +10)
+  costAtTime  Decimal      @db.Decimal(10, 2) // ต้นทุน ณ ตอนนั้น
+  reason      String?      // หมายเหตุ เช่น "ทำน้ำจิ้มล็อตเช้า", "กุ้งเน่าทิ้ง"
+  
+  createdAt   DateTime @default(now())
+
+  @@index([stockItemId, type])
+  @@index([createdAt])
+}
+
+// ==========================================
+// 🍳 2.5 ตารางสูตรอาหาร (Recipe)
+// เชื่อม Product กับ Stock เพื่อตัดสต็อกอัตโนมัติ
+// ==========================================
+model Recipe {
+  id          Int      @id @default(autoincrement())
+  productId   Int
+  stockItemId Int
+  quantity    Decimal  @db.Decimal(10, 2) // ใช้ปริมาณเท่าไหร่ต่อ 1 จาน
+
+  product     Product   @relation(fields: [productId], references: [id], onDelete: Cascade)
+  stockItem   StockItem @relation(fields: [stockItemId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, stockItemId]) // ห้ามใส่ซ้ำคู่เดิม
+}
+
+// ==========================================
+// 🧾 3. ตารางออเดอร์ (Order)
 // ==========================================
 model Order {
-  id              Int         @id @default(autoincrement())
-  customerName    String?     // ชื่อลูกค้า (ถ้ามี)
+  id               Int       @id @default(autoincrement())
+  customerName     String?   @default("Walk-in")
   
-  // -- ส่วนเชื่อมต่อ Discord --
-  discordUserId   String?     // ID ลูกค้าใน Discord (เอาไว้ให้ Bot ทักแชทกลับ)
-  discordChannelId String?    // ID ห้องที่สั่ง (เอาไว้ให้ Bot ตอบถูกห้อง)
+  // Discord Integration
+  discordUserId    String?
+  discordChannelId String?
   
-  // -- ข้อมูลการเงิน --
-  totalAmount     Decimal     @db.Decimal(10, 2)
-  paymentMethod   String?     // Cash, Transfer, QR
-  status          OrderStatus @default(Pending)
-  note            String?     @db.Text // หมายเหตุ เช่น ไม่ใส่ผัก
-  
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  // Financials
+  totalAmount      Decimal   @db.Decimal(10, 2)
+  paymentMethod    String?   // Cash, Transfer
+  status           OrderStatus @default(Pending)
+  note             String?   @db.Text
+  slipImage        String?  // 🆕 เพิ่มฟิลด์นี้ (String และเป็น null ได้)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
 
-  // ความสัมพันธ์: ออเดอร์นี้มีรายการอาหารอะไรบ้าง
-  items           OrderItem[]
-}
+  // Relations
+  items            OrderItem[]
+  transaction      Transaction? // 1 ออเดอร์ มี 1 รายรับ (Optional เพราะอาจยังไม่จ่ายเงิน)
 
-enum OrderStatus {
-  Pending   // รอทำ
-  Cooking   // กำลังทำ
-  Completed // เสร็จแล้ว (แจ้งเตือนลูกค้าได้)
-  Cancelled // ยกเลิก
+  @@index([createdAt])      // ค้นหาตามวันได้เร็ว (ทำ Report)
+  @@index([discordUserId])  // ค้นหาประวัติลูกค้าได้เร็ว
+  @@index([status])         // ดึงออเดอร์ที่ยังไม่เสร็จได้เร็ว
 }
 
 // ==========================================
 // 🍽️ 4. รายละเอียดออเดอร์ (OrderItem)
-// ใช้สำหรับ: เก็บว่าออเดอร์นั้นสั่งอะไรไปบ้าง จำนวนเท่าไหร่
 // ==========================================
 model OrderItem {
   id          Int      @id @default(autoincrement())
   orderId     Int
-  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  
   productId   Int?
-  product     Product? @relation(fields: [productId], references: [id]) 
   
-  // สำคัญ: ต้องเก็บชื่อและราคาแยกไว้ เผื่ออนาคตสินค้าต้นทางถูกลบหรือเปลี่ยนราคา บิลเก่าต้องไม่เพี้ยน
+  // Snapshot Data (สำคัญมาก)
   productName String   
   quantity    Int
   priceAtTime Decimal  @db.Decimal(10, 2) 
+
+  // Relations
+  order       Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  product     Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
 }
 
 // ==========================================
 // 💰 5. ตารางบัญชี (Transaction)
-// เก็บรายรับ-รายจ่าย เพื่อคำนวณกำไร
 // ==========================================
 model Transaction {
-  id          Int      @id @default(autoincrement())
-  type        String   // "INCOME" (รายรับ) หรือ "EXPENSE" (รายจ่าย)
-  amount      Decimal  @db.Decimal(10, 2)
-  category    String   // เช่น Sales (ขายของ), Stock (ซื้อของ), Utilities (ค่าน้ำไฟ), Salary (เงินเดือน)
-  description String?  // รายละเอียดเพิ่มเติม
-  createdAt   DateTime @default(now())
+  id          Int             @id @default(autoincrement())
+  type        TransactionType // INCOME, EXPENSE
+  amount      Decimal         @db.Decimal(10, 2)
+  category    String          // Sales, Stock Purchase, Salary
+  description String?
+  
+  // Link กับ Order (Optional)
+  orderId     Int?            @unique // 1 Order มีได้แค่ 1 Transaction รับเงิน
+  order       Order?          @relation(fields: [orderId], references: [id])
+
+  createdAt   DateTime        @default(now())
+
+  @@index([type, createdAt]) // ทำ Report แยกรับ/จ่าย รายเดือนได้เร็ว
+}
+
+// ==========================================
+// 📌 Enums (ค่าคงที่)
+// ==========================================
+
+enum OrderStatus {
+  Pending   // รอคิว
+  Cooking   // กำลังทำ
+  Completed // เสร็จ/เสิร์ฟแล้ว
+  Cancelled // ยกเลิก
 }
 
 enum TransactionType {
-  Income
-  Expense
+  INCOME    // รายรับ
+  EXPENSE   // รายจ่าย
+}
+
+enum StockLogType {
+  USE       // ใช้ทำอาหาร
+  WASTE     // ของเสีย/ทิ้ง
+  RESTOCK   // เติมของใหม่
+  ADJUST    // ปรับยอด (นับสต็อกแล้วไม่ตรง)
 }
