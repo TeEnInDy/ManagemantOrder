@@ -23,13 +23,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
+import {
   // ✅ ต้อง import ให้ครบตามนี้ครับ
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription 
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription
 } from "@/components/ui/dialog";
-import { 
-  Download, Search, ArrowUpCircle, ArrowDownCircle, Wrench, 
-  Calendar, Loader2, ChevronRight, PlusCircle, UploadCloud, X, Eye 
+import {
+  Download, Search, ArrowUpCircle, ArrowDownCircle, Wrench,
+  Calendar, Loader2, ChevronRight, PlusCircle, UploadCloud, X, Eye
 } from "lucide-react";
 
 // ... (Types และตัวแปรอื่นๆ เหมือนเดิม)
@@ -69,7 +69,7 @@ const getWeeksInMonth = (month: number, year: number) => {
 
 export default function TransactionsPage() {
   const router = useRouter();
-  
+
   // ... (States เดิมทั้งหมด)
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [filteredTx, setFilteredTx] = useState<Transaction[]>([]);
@@ -118,8 +118,8 @@ export default function TransactionsPage() {
     try {
       setLoading(true);
       const params = buildQueryParams();
-      const res = await axios.get(`${BACKEND_URL}/api/transactions?${params.toString()}`);
-      const sorted = res.data.history.sort((a: any, b: any) => 
+      const res = await axios.get<any>(`${BACKEND_URL}/api/transactions?${params.toString()}`);
+      const sorted = res.data.history.sort((a: any, b: any) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
       setTransactions(sorted);
@@ -139,8 +139,8 @@ export default function TransactionsPage() {
     let result = transactions;
     if (typeFilter !== "ALL") result = result.filter(t => t.type === typeFilter);
     if (searchTerm) {
-      result = result.filter(t => 
-        t.category.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      result = result.filter(t =>
+        t.category.toLowerCase().includes(searchTerm.toLowerCase()) ||
         (t.description && t.description.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
@@ -191,44 +191,44 @@ export default function TransactionsPage() {
 
   const handleViewSlip = (slipImage: string) => {
     if (slipImage) {
-        let fullUrl = slipImage;
-        // 🛠️ แก้ไข Logic การสร้าง URL ให้ครอบคลุมทุกเคส
-        if (!slipImage.startsWith("http")) {
-            // 1. เปลี่ยน Backslash (\) เป็น Slash (/) เผื่อมาจาก Windows
-            let cleanPath = slipImage.replace(/\\/g, '/');
-            
-            // 2. ถ้าไม่มี / นำหน้า ให้เติม
-            if (!cleanPath.startsWith('/')) {
-                cleanPath = `/${cleanPath}`;
-            }
+      let fullUrl = slipImage;
+      // 🛠️ แก้ไข Logic การสร้าง URL ให้ครอบคลุมทุกเคส
+      if (!slipImage.startsWith("http")) {
+        // 1. เปลี่ยน Backslash (\) เป็น Slash (/) เผื่อมาจาก Windows
+        let cleanPath = slipImage.replace(/\\/g, '/');
 
-            // 3. ต่อ String กับ Backend URL
-            // (Database อาจเก็บ /uploads/slips/xxx.jpg หรือ uploads/slips/xxx.jpg)
-            // เช็คว่าใน path มีคำว่า uploads ซ้ำไหม ถ้ามีให้ตัดออกตัวนึง
-            if (cleanPath.startsWith('/uploads/') && BACKEND_URL.endsWith('/')) {
-                 // กรณีกันพลาด (ไม่น่าเกิดถ้าวางระบบดี)
-            }
-            
-            fullUrl = `${BACKEND_URL}${cleanPath}`;
+        // 2. ถ้าไม่มี / นำหน้า ให้เติม
+        if (!cleanPath.startsWith('/')) {
+          cleanPath = `/${cleanPath}`;
         }
-        
-        console.log("Opening Slip URL:", fullUrl); // 👈 ดู Log ใน Console ได้เลยถ้ารูปไม่ขึ้น
-        setViewSlipUrl(fullUrl);
-        setIsViewSlipOpen(true);
+
+        // 3. ต่อ String กับ Backend URL
+        // (Database อาจเก็บ /uploads/slips/xxx.jpg หรือ uploads/slips/xxx.jpg)
+        // เช็คว่าใน path มีคำว่า uploads ซ้ำไหม ถ้ามีให้ตัดออกตัวนึง
+        if (cleanPath.startsWith('/uploads/') && BACKEND_URL.endsWith('/')) {
+          // กรณีกันพลาด (ไม่น่าเกิดถ้าวางระบบดี)
+        }
+
+        fullUrl = `${BACKEND_URL}${cleanPath}`;
+      }
+
+      console.log("Opening Slip URL:", fullUrl); // 👈 ดู Log ใน Console ได้เลยถ้ารูปไม่ขึ้น
+      setViewSlipUrl(fullUrl);
+      setIsViewSlipOpen(true);
     }
   };
 
   const handleSyncData = async () => {
     if (!confirm("⚠️ ต้องการ Sync ข้อมูลบัญชีกับสต็อกใหม่หรือไม่?")) return;
     try {
-        await axios.post(`${BACKEND_URL}/api/transactions/fix-data`);
-        alert("Sync Completed!");
-        fetchTransactions();
+      await axios.post(`${BACKEND_URL}/api/transactions/fix-data`);
+      alert("Sync Completed!");
+      fetchTransactions();
     } catch (e) { alert("Sync Failed"); }
   };
 
   const handleNavigation = (tab: string) => {
-    if (tab === "New Order") router.push("/");
+    if (tab === "New Order") router.push("/order");
     else if (tab === "Dashboard") router.push("/dashboard");
     else if (tab === "Order History") router.push("/order-history");
     else if (tab === "Stock") router.push("/stock");
@@ -250,9 +250,9 @@ export default function TransactionsPage() {
           </div>
           <div className="flex gap-2">
             <Button variant="outline" className="gap-2 text-orange-600 border-orange-200" onClick={handleSyncData}>
-                <Wrench className="w-4 h-4" /> Fix Data
+              <Wrench className="w-4 h-4" /> Fix Data
             </Button>
-            <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white" 
+            <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
               onClick={() => window.open(`${BACKEND_URL}/api/transactions/export-pdf?${buildQueryParams().toString()}`, "_blank")}>
               <Download className="w-4 h-4" /> Export PDF
             </Button>
@@ -261,111 +261,111 @@ export default function TransactionsPage() {
 
         <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-             <Tabs value={filterMode} onValueChange={setFilterMode} className="w-auto">
-                <TabsList>
-                  <TabsTrigger value="weekly">Weekly</TabsTrigger>
-                  <TabsTrigger value="monthly">Monthly</TabsTrigger>
-                  <TabsTrigger value="yearly">Yearly</TabsTrigger>
-                </TabsList>
-             </Tabs>
-             <div className="flex flex-wrap items-center gap-2">
-                <Calendar className="w-4 h-4 text-zinc-400 mr-1" />
-                <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="p-2 rounded-md border bg-zinc-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                  {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+            <Tabs value={filterMode} onValueChange={setFilterMode} className="w-auto">
+              <TabsList>
+                <TabsTrigger value="weekly">Weekly</TabsTrigger>
+                <TabsTrigger value="monthly">Monthly</TabsTrigger>
+                <TabsTrigger value="yearly">Yearly</TabsTrigger>
+              </TabsList>
+            </Tabs>
+            <div className="flex flex-wrap items-center gap-2">
+              <Calendar className="w-4 h-4 text-zinc-400 mr-1" />
+              <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="p-2 rounded-md border bg-zinc-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              {filterMode !== "yearly" && (
+                <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="p-2 rounded-md border bg-zinc-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString("en-US", { month: "short" })}</option>
+                  ))}
                 </select>
-                {filterMode !== "yearly" && (
-                  <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="p-2 rounded-md border bg-zinc-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
-                    {Array.from({ length: 12 }, (_, i) => (
-                      <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString("en-US", { month: "short" })}</option>
-                    ))}
+              )}
+              {filterMode === "weekly" && (
+                <div className="flex items-center gap-2 animate-in fade-in">
+                  <ChevronRight className="w-4 h-4 text-zinc-300" />
+                  <select value={selectedWeekIdx} onChange={(e) => setSelectedWeekIdx(Number(e.target.value))} className="p-2 rounded-md border border-blue-200 bg-blue-50 text-blue-700 text-sm min-w-[140px]">
+                    {weeks.map((w, idx) => <option key={idx} value={idx}>{w.label}</option>)}
                   </select>
-                )}
-                {filterMode === "weekly" && (
-                  <div className="flex items-center gap-2 animate-in fade-in">
-                    <ChevronRight className="w-4 h-4 text-zinc-300" />
-                    <select value={selectedWeekIdx} onChange={(e) => setSelectedWeekIdx(Number(e.target.value))} className="p-2 rounded-md border border-blue-200 bg-blue-50 text-blue-700 text-sm min-w-[140px]">
-                      {weeks.map((w, idx) => <option key={idx} value={idx}>{w.label}</option>)}
-                    </select>
-                  </div>
-                )}
-             </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
         {/* Search & Withdraw */}
         <div className="flex flex-col md:flex-row justify-between gap-4 items-end md:items-center">
-            <div className="flex flex-1 gap-4 w-full">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
-                    <Input placeholder="Search category or description..." className="pl-9 bg-white dark:bg-zinc-900" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
-                </div>
-                <Select value={typeFilter} onValueChange={setTypeFilter}>
-                    <SelectTrigger className="w-[180px] bg-white dark:bg-zinc-900"><SelectValue placeholder="All Types" /></SelectTrigger>
-                    <SelectContent>
-                    <SelectItem value="ALL">All Transactions</SelectItem>
-                    <SelectItem value="INCOME">Income</SelectItem>
-                    <SelectItem value="EXPENSE">Expense</SelectItem>
-                    </SelectContent>
-                </Select>
+          <div className="flex flex-1 gap-4 w-full">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+              <Input placeholder="Search category or description..." className="pl-9 bg-white dark:bg-zinc-900" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
             </div>
+            <Select value={typeFilter} onValueChange={setTypeFilter}>
+              <SelectTrigger className="w-[180px] bg-white dark:bg-zinc-900"><SelectValue placeholder="All Types" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">All Transactions</SelectItem>
+                <SelectItem value="INCOME">Income</SelectItem>
+                <SelectItem value="EXPENSE">Expense</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
 
-            <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
-                <DialogTrigger asChild>
-                    <Button className="bg-red-600 hover:bg-red-700 text-white gap-2 shadow-sm whitespace-nowrap">
-                        <PlusCircle className="w-4 h-4" /> เบิกเงิน / บันทึกรายจ่าย
-                    </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[425px]">
-                    <DialogHeader>
-                        <DialogTitle>บันทึกการเบิกจ่าย (Expense)</DialogTitle>
-                    </DialogHeader>
-                    {/* ... (Form Withdraw เหมือนเดิม) ... */}
-                    <div className="grid gap-4 py-4">
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label className="text-right">Amount</Label>
-                            <Input type="number" value={withdrawForm.amount} onChange={(e) => setWithdrawForm({...withdrawForm, amount: e.target.value})} placeholder="0.00" className="col-span-3" />
+          <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-red-600 hover:bg-red-700 text-white gap-2 shadow-sm whitespace-nowrap">
+                <PlusCircle className="w-4 h-4" /> เบิกเงิน / บันทึกรายจ่าย
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[425px]">
+              <DialogHeader>
+                <DialogTitle>บันทึกการเบิกจ่าย (Expense)</DialogTitle>
+              </DialogHeader>
+              {/* ... (Form Withdraw เหมือนเดิม) ... */}
+              <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right">Amount</Label>
+                  <Input type="number" value={withdrawForm.amount} onChange={(e) => setWithdrawForm({ ...withdrawForm, amount: e.target.value })} placeholder="0.00" className="col-span-3" />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right">Category</Label>
+                  <select className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={withdrawForm.category} onChange={(e) => setWithdrawForm({ ...withdrawForm, category: e.target.value })}>
+                    <option value="Withdrawal">Withdrawal (เบิกเงินสด)</option>
+                    <option value="Salary">Salary (เงินเดือน)</option>
+                    <option value="Stock Purchase">Stock Purchase (ซื้อของ)</option>
+                    <option value="Utility Bill">Utility Bill (ค่าน้ำ/ไฟ)</option>
+                    <option value="Maintenance">Maintenance (ซ่อมแซม)</option>
+                    <option value="Other">Other (อื่นๆ)</option>
+                  </select>
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                  <Label className="text-right">Detail</Label>
+                  <Input value={withdrawForm.description} onChange={(e) => setWithdrawForm({ ...withdrawForm, description: e.target.value })} placeholder="รายละเอียด..." className="col-span-3" />
+                </div>
+                <div className="grid grid-cols-4 items-start gap-4">
+                  <Label className="text-right mt-2">Slip</Label>
+                  <div className="col-span-3">
+                    <div className="border-2 border-dashed border-zinc-300 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 transition" onClick={() => fileInputRef.current?.click()}>
+                      {previewUrl ? (
+                        <div className="relative">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img src={previewUrl} alt="Preview" className="h-32 object-contain rounded" />
+                          <button onClick={(e) => { e.stopPropagation(); setPreviewUrl(null); setSelectedFile(null); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow"><X className="w-3 h-3" /></button>
                         </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label className="text-right">Category</Label>
-                            <select className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={withdrawForm.category} onChange={(e) => setWithdrawForm({...withdrawForm, category: e.target.value})}>
-                                <option value="Withdrawal">Withdrawal (เบิกเงินสด)</option>
-                                <option value="Salary">Salary (เงินเดือน)</option>
-                                <option value="Stock Purchase">Stock Purchase (ซื้อของ)</option>
-                                <option value="Utility Bill">Utility Bill (ค่าน้ำ/ไฟ)</option>
-                                <option value="Maintenance">Maintenance (ซ่อมแซม)</option>
-                                <option value="Other">Other (อื่นๆ)</option>
-                            </select>
-                        </div>
-                        <div className="grid grid-cols-4 items-center gap-4">
-                            <Label className="text-right">Detail</Label>
-                            <Input value={withdrawForm.description} onChange={(e) => setWithdrawForm({...withdrawForm, description: e.target.value})} placeholder="รายละเอียด..." className="col-span-3" />
-                        </div>
-                        <div className="grid grid-cols-4 items-start gap-4">
-                            <Label className="text-right mt-2">Slip</Label>
-                            <div className="col-span-3">
-                                <div className="border-2 border-dashed border-zinc-300 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 transition" onClick={() => fileInputRef.current?.click()}>
-                                    {previewUrl ? (
-                                        <div className="relative">
-                                            {/* eslint-disable-next-line @next/next/no-img-element */}
-                                            <img src={previewUrl} alt="Preview" className="h-32 object-contain rounded" />
-                                            <button onClick={(e) => { e.stopPropagation(); setPreviewUrl(null); setSelectedFile(null); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow"><X className="w-3 h-3" /></button>
-                                        </div>
-                                    ) : (
-                                        <>
-                                            <UploadCloud className="w-8 h-8 text-zinc-400 mb-2" /><p className="text-xs text-zinc-500">Upload Slip</p>
-                                        </>
-                                    )}
-                                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
-                                </div>
-                            </div>
-                        </div>
+                      ) : (
+                        <>
+                          <UploadCloud className="w-8 h-8 text-zinc-400 mb-2" /><p className="text-xs text-zinc-500">Upload Slip</p>
+                        </>
+                      )}
+                      <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
                     </div>
-                    <DialogFooter>
-                        <Button variant="outline" onClick={() => setIsWithdrawOpen(false)}>Cancel</Button>
-                        <Button onClick={handleWithdrawSubmit} disabled={isUploading} className="bg-red-600 hover:bg-red-700">{isUploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : "Confirm"}</Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsWithdrawOpen(false)}>Cancel</Button>
+                <Button onClick={handleWithdrawSubmit} disabled={isUploading} className="bg-red-600 hover:bg-red-700">{isUploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : "Confirm"}</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Table */}
@@ -383,29 +383,29 @@ export default function TransactionsPage() {
             </TableHeader>
             <TableBody>
               {loading ? (
-                <TableRow><TableCell colSpan={6} className="text-center py-10"><Loader2 className="animate-spin inline mr-2"/> Loading...</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="text-center py-10"><Loader2 className="animate-spin inline mr-2" /> Loading...</TableCell></TableRow>
               ) : filteredTx.length === 0 ? (
                 <TableRow><TableCell colSpan={6} className="text-center py-10 text-zinc-500">No data found.</TableCell></TableRow>
               ) : (
                 filteredTx.map((tx) => (
                   <TableRow key={tx.id}>
                     <TableCell className="font-medium text-zinc-500 text-sm">
-                      {new Date(tx.createdAt).toLocaleDateString('th-TH', { year: '2-digit', month: 'short', day: 'numeric' })}<br/>
-                      <span className="text-xs text-zinc-400">{new Date(tx.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute:'2-digit' })}</span>
+                      {new Date(tx.createdAt).toLocaleDateString('th-TH', { year: '2-digit', month: 'short', day: 'numeric' })}<br />
+                      <span className="text-xs text-zinc-400">{new Date(tx.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' })}</span>
                     </TableCell>
                     <TableCell>
                       <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${tx.type === 'INCOME' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                        {tx.type === 'INCOME' ? <ArrowUpCircle className="w-3 h-3"/> : <ArrowDownCircle className="w-3 h-3"/>}{tx.type}
+                        {tx.type === 'INCOME' ? <ArrowUpCircle className="w-3 h-3" /> : <ArrowDownCircle className="w-3 h-3" />}{tx.type}
                       </span>
                     </TableCell>
                     <TableCell>{tx.category}</TableCell>
                     <TableCell className="text-zinc-500 text-sm max-w-[200px] truncate">{tx.description || "-"}</TableCell>
                     <TableCell className="text-center">
-                        {tx.slipImage ? (
-                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => handleViewSlip(tx.slipImage!)} title="View Slip">
-                                <Eye className="w-4 h-4" />
-                            </Button>
-                        ) : <span className="text-zinc-300">-</span>}
+                      {tx.slipImage ? (
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => handleViewSlip(tx.slipImage!)} title="View Slip">
+                          <Eye className="w-4 h-4" />
+                        </Button>
+                      ) : <span className="text-zinc-300">-</span>}
                     </TableCell>
                     <TableCell className={`text-right font-bold ${tx.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}`}>
                       {tx.type === 'EXPENSE' ? "-" : "+"}฿{Number(tx.amount).toLocaleString()}
@@ -420,36 +420,36 @@ export default function TransactionsPage() {
 
       {/* 🔴 แก้ไข: View Slip Modal (เพิ่ม DialogHeader/Title แต่ซ่อนไว้) */}
       <Dialog open={isViewSlipOpen} onOpenChange={setIsViewSlipOpen}>
-          <DialogContent className="sm:max-w-lg p-0 overflow-hidden bg-black/90 border-none">
-              
-              {/* ✅ เพิ่มส่วนนี้เพื่อแก้ Error Accessibility */}
-              <DialogHeader className="sr-only"> 
-                <DialogTitle>View Payment Slip</DialogTitle>
-                <DialogDescription>Image preview of the transaction slip</DialogDescription>
-              </DialogHeader>
+        <DialogContent className="sm:max-w-lg p-0 overflow-hidden bg-black/90 border-none">
 
-              <div className="relative w-full h-[80vh] flex items-center justify-center">
-                  {viewSlipUrl && (
-                      // eslint-disable-next-line @next/next/no-img-element
-                      <img 
-                        src={viewSlipUrl} 
-                        alt="Payment Slip" 
-                        className="max-w-full max-h-full object-contain"
-                        onError={(e) => {
-                            // ถ้าโหลดรูปไม่ขึ้น ให้แสดง placeholder หรือแจ้งเตือน
-                            e.currentTarget.style.display = 'none';
-                            alert(`ไม่สามารถโหลดรูปภาพได้: ${viewSlipUrl}`);
-                        }}
-                      />
-                  )}
-                  <button 
-                    onClick={() => setIsViewSlipOpen(false)}
-                    className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white rounded-full p-2 backdrop-blur-sm transition-colors"
-                  >
-                      <X className="w-5 h-5" />
-                  </button>
-              </div>
-          </DialogContent>
+          {/* ✅ เพิ่มส่วนนี้เพื่อแก้ Error Accessibility */}
+          <DialogHeader className="sr-only">
+            <DialogTitle>View Payment Slip</DialogTitle>
+            <DialogDescription>Image preview of the transaction slip</DialogDescription>
+          </DialogHeader>
+
+          <div className="relative w-full h-[80vh] flex items-center justify-center">
+            {viewSlipUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={viewSlipUrl}
+                alt="Payment Slip"
+                className="max-w-full max-h-full object-contain"
+                onError={(e) => {
+                  // ถ้าโหลดรูปไม่ขึ้น ให้แสดง placeholder หรือแจ้งเตือน
+                  e.currentTarget.style.display = 'none';
+                  alert(`ไม่สามารถโหลดรูปภาพได้: ${viewSlipUrl}`);
+                }}
+              />
+            )}
+            <button
+              onClick={() => setIsViewSlipOpen(false)}
+              className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white rounded-full p-2 backdrop-blur-sm transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </DialogContent>
       </Dialog>
     </div>
   );

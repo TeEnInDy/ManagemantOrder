@@ -8,6 +8,7 @@ import productRoutes from './routes/productRoutes';
 import orderRoutes from './routes/orderRoutes';
 import stockRoutes from './routes/stockRoutes';
 import transactionRoutes from './routes/transactionRoutes';
+import authRoutes from './routes/authRoutes';
 
 dotenv.config();
 
@@ -19,7 +20,7 @@ app.use(cors()); // อนุญาตให้ Frontend ยิงเข้า�
 app.use(express.json()); // อ่าน JSON body
 
 // ================= ROUTES =================
-
+app.use('/api/auth', authRoutes); // login
 // 1. สินค้า (Menu)
 app.use('/api/products', productRoutes);
 

@@ -156,7 +156,14 @@ model Transaction {
 
   @@index([type, createdAt]) // ทำ Report แยกรับ/จ่าย รายเดือนได้เร็ว
 }
-
+// 👤 6. ตารางผู้ใช้งาน (User)
+model User {
+  id        Int      @id @default(autoincrement())
+  username  String   @unique
+  password  String   // เก็บแบบ Hash (ห้ามเก็บ Plain Text)
+  role      Role     @default(STAFF) // ADMIN, STAFF
+  createdAt DateTime @default(now())
+}
 // ==========================================
 // 📌 Enums (ค่าคงที่)
 // ==========================================
@@ -178,4 +185,8 @@ enum StockLogType {
   WASTE     // ของเสีย/ทิ้ง
   RESTOCK   // เติมของใหม่
   ADJUST    // ปรับยอด (นับสต็อกแล้วไม่ตรง)
+}
+enum Role {
+  ADMIN
+  STAFF
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   ShoppingCart,
@@ -8,6 +9,7 @@ import {
   BarChart3,
   User,
   Menu,
+  LogOut
 } from "lucide-react";
 
 interface NavbarProps {
@@ -23,6 +25,17 @@ export function Navbar({ activeTab, onTabChange }: NavbarProps) {
     { id: "order-history", label: "Order History", icon: History },
     { id: "transactions", label: "Transactions", icon: BarChart3 },
   ];
+  const router = useRouter(); // Hook
+
+  const handleLogout = () => {
+    // ลบ Cookie
+    document.cookie = "token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    localStorage.removeItem("user");
+
+    // ดีดกลับไปหน้า Login
+    router.push("/login");
+    router.refresh();
+  };
 
   return (
     <nav className="w-full bg-white border-b border-gray-200 z-50 h-[72px]">
@@ -32,10 +45,10 @@ export function Navbar({ activeTab, onTabChange }: NavbarProps) {
           {/* Logo */}
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-700 to-blue-900 flex items-center justify-center shadow-md">
-              <span className="text-white font-bold text-lg">🦐</span>
+              <img src="/logo.jpg" alt="Logo" className="object-cover w-full h-full" />
             </div>
             <span className="hidden sm:inline font-bold text-gray-900 text-lg">
-              Pickled Shrimp
+              EBI ZUKE
             </span>
           </div>
 
@@ -50,11 +63,10 @@ export function Navbar({ activeTab, onTabChange }: NavbarProps) {
                 <button
                   key={item.id}
                   onClick={() => onTabChange(item.label)}
-                  className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-all duration-200 ${
-                    isActive
-                      ? "bg-blue-50 text-blue-700 font-medium"
-                      : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
-                  }`}
+                  className={`flex items-center gap-2 rounded-lg px-3 py-2 transition-all duration-200 ${isActive
+                    ? "bg-blue-50 text-blue-700 font-medium"
+                    : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                    }`}
                 >
                   <Icon className="w-5 h-5" />
                   <span className="text-sm font-medium">{item.label}</span>
@@ -64,11 +76,19 @@ export function Navbar({ activeTab, onTabChange }: NavbarProps) {
           </div>
         </div>
 
+
         {/* Right Section: Profile & Mobile Trigger */}
         <div className="flex items-center gap-4">
           {/* Mobile Menu Button (Hamburger) - ซ่อนบนจอใหญ่ */}
           <button className="md:hidden p-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors">
             <Menu className="w-6 h-6" />
+          </button>
+          <button
+            onClick={handleLogout}
+            className="w-10 h-10 rounded-full bg-red-50 hover:bg-red-100 flex items-center justify-center transition-colors border border-red-200 text-red-600"
+            title="Logout"
+          >
+            <LogOut className="w-5 h-5" />
           </button>
 
           {/* User Profile Button */}

@@ -66,7 +66,7 @@ export default function OrderHistoryPage() {
 
 
   const handleNavigation = (tab: string) => {
-    if (tab === "New Order") router.push("/");
+    if (tab === "New Order") router.push("/order");
     else if (tab === "Dashboard") router.push("/dashboard");
     else if (tab === "Order History") router.push("/order-history");
     else if (tab === "Stock") router.push("/stock");

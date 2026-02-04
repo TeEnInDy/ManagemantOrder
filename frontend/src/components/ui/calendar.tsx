@@ -60,12 +60,8 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        IconLeft: ({ className, ...props }) => (
-          <ChevronLeft className={cn("size-4", className)} {...props} />
-        ),
-        IconRight: ({ className, ...props }) => (
-          <ChevronRight className={cn("size-4", className)} {...props} />
-        ),
+        // v9 ใช้ Chevron ตัวเดียว (เดี๋ยว CSS มันหมุนให้เอง)
+        Chevron: ({ ...props }) => <ChevronLeft className="h-4 w-4" />,
       }}
       {...props}
     />

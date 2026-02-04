@@ -73,7 +73,7 @@ export default function DashboardPage() {
       params.append("year", selectedYear.toString());
 
       const res = await axios.get(`http://localhost:4000/api/transactions?${params.toString()}`);
-      setSummary(res.data.summary);
+      setSummary((res.data as any).summary);
     } catch (error) {
       console.error("Failed to fetch dashboard:", error);
     } finally {
@@ -86,7 +86,7 @@ export default function DashboardPage() {
   }, [fetchDashboardData]);
 
   const handleNavigation = (tab: string) => {
-    if (tab === "New Order") router.push("/");
+    if (tab === "New Order") router.push("/order");
     else if (tab === "Dashboard") router.push("/dashboard");
     else if (tab === "Order History") router.push("/order-history");
     else if (tab === "Stock") router.push("/stock");
@@ -110,33 +110,33 @@ export default function DashboardPage() {
             <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Executive Dashboard</h2>
             <p className="text-zinc-500">ภาพรวมสถานะการเงินของร้าน</p>
           </div>
-          
+
           <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 p-2 rounded-lg border shadow-sm">
-             <Calendar className="w-4 h-4 text-zinc-400" />
-             <select 
-               value={selectedMonth} 
-               onChange={(e) => setSelectedMonth(Number(e.target.value))} 
-               className="bg-transparent text-sm outline-none font-medium"
-             >
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString("en-US", { month: "long" })}</option>
-                ))}
-             </select>
-             <select 
-               value={selectedYear} 
-               onChange={(e) => setSelectedYear(Number(e.target.value))} 
-               className="bg-transparent text-sm outline-none font-medium"
-             >
-               {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-             </select>
-             <Button size="icon" variant="ghost" onClick={fetchDashboardData}>
-               <RefreshCcw className="w-4 h-4" />
-             </Button>
+            <Calendar className="w-4 h-4 text-zinc-400" />
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(Number(e.target.value))}
+              className="bg-transparent text-sm outline-none font-medium"
+            >
+              {Array.from({ length: 12 }, (_, i) => (
+                <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString("en-US", { month: "long" })}</option>
+              ))}
+            </select>
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(Number(e.target.value))}
+              className="bg-transparent text-sm outline-none font-medium"
+            >
+              {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+            </select>
+            <Button size="icon" variant="ghost" onClick={fetchDashboardData}>
+              <RefreshCcw className="w-4 h-4" />
+            </Button>
           </div>
         </div>
 
         {loading ? (
-           <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>
+          <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>
         ) : (
           <div className="space-y-8 animate-in fade-in">
             {/* Key Metrics Cards */}
@@ -162,7 +162,7 @@ export default function DashboardPage() {
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="name" axisLine={false} tickLine={false} />
                       <YAxis tickFormatter={(val) => `฿${val}`} axisLine={false} tickLine={false} />
-                      <Tooltip formatter={(val: number) => `฿${val.toLocaleString()}`} cursor={{fill: 'transparent'}} />
+                      <Tooltip formatter={(val: number) => `฿${val.toLocaleString()}`} cursor={{ fill: 'transparent' }} />
                       <Bar dataKey="amount" radius={[4, 4, 0, 0]} barSize={50} />
                     </BarChart>
                   </ResponsiveContainer>
@@ -171,16 +171,16 @@ export default function DashboardPage() {
 
               {/* Pie Chart & Partners */}
               <div className="col-span-3 space-y-4">
-                 <Card className="h-full">
-                    <CardHeader><CardTitle>Profit Distribution</CardTitle></CardHeader>
-                    <CardContent>
-                       <div className="space-y-4">
-                          <PartnerRow name="Teen (50%)" amount={summary?.distribution?.shares.teen_50} color="bg-blue-500" />
-                          <PartnerRow name="Pond (25%)" amount={summary?.distribution?.shares.pond_25} color="bg-cyan-500" />
-                          <PartnerRow name="Beam (25%)" amount={summary?.distribution?.shares.beam_25} color="bg-indigo-500" />
-                       </div>
-                    </CardContent>
-                 </Card>
+                <Card className="h-full">
+                  <CardHeader><CardTitle>Profit Distribution</CardTitle></CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      <PartnerRow name="Teen (50%)" amount={summary?.distribution?.shares.teen_50} color="bg-blue-500" />
+                      <PartnerRow name="Pond (25%)" amount={summary?.distribution?.shares.pond_25} color="bg-cyan-500" />
+                      <PartnerRow name="Beam (25%)" amount={summary?.distribution?.shares.beam_25} color="bg-indigo-500" />
+                    </div>
+                  </CardContent>
+                </Card>
               </div>
             </div>
           </div>
@@ -206,13 +206,13 @@ function SummaryCard({ title, value, icon: Icon, color }: any) {
 }
 
 function PartnerRow({ name, amount, color }: any) {
-    return (
-        <div className="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-zinc-800">
-            <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full ${color}`} />
-                <span className="text-sm font-medium">{name}</span>
-            </div>
-            <span className="font-bold text-green-600">฿{(amount || 0).toLocaleString()}</span>
-        </div>
-    )
+  return (
+    <div className="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-zinc-800">
+      <div className="flex items-center gap-2">
+        <div className={`w-3 h-3 rounded-full ${color}`} />
+        <span className="text-sm font-medium">{name}</span>
+      </div>
+      <span className="font-bold text-green-600">฿{(amount || 0).toLocaleString()}</span>
+    </div>
+  )
 }
