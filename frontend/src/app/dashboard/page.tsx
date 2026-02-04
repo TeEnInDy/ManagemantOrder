@@ -90,7 +90,7 @@ export default function DashboardPage() {
     else if (tab === "Dashboard") router.push("/dashboard");
     else if (tab === "Order History") router.push("/order-history");
     else if (tab === "Stock") router.push("/stock");
-    else if (tab === "Reports") router.push("/reports"); // Reports ตอนนี้คือ Transaction
+    else if (tab === "Transactions") router.push("/reports"); // Reports ตอนนี้คือ Transaction
   };
 
   const paymentPieData = [

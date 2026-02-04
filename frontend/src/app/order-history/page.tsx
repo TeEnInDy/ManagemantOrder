@@ -70,7 +70,7 @@ export default function OrderHistoryPage() {
     else if (tab === "Dashboard") router.push("/dashboard");
     else if (tab === "Order History") router.push("/order-history");
     else if (tab === "Stock") router.push("/stock");
-    else if (tab === "Reports") router.push("/reports");
+    else if (tab === "Transactions") router.push("/reports");
   };
 
   // --- 2. Fetch Orders from Backend ---

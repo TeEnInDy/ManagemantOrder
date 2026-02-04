@@ -139,7 +139,7 @@ export default function Home() {
     const routes: Record<string, string> = {
       Dashboard: "/dashboard",
       "Order History": "/order-history",
-      Reports: "/reports",
+      Transactions: "/reports",
       Stock: "/stock",
     };
     if (routes[tab]) router.push(routes[tab]);

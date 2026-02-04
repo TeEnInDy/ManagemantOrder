@@ -232,13 +232,13 @@ export default function TransactionsPage() {
     else if (tab === "Dashboard") router.push("/dashboard");
     else if (tab === "Order History") router.push("/order-history");
     else if (tab === "Stock") router.push("/stock");
-    else if (tab === "Reports") router.push("/reports");
+    else if (tab === "Transactions") router.push("/reports");
   };
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black font-sans">
       <div className="sticky top-0 z-50">
-        <Navbar activeTab="Reports" onTabChange={handleNavigation} />
+        <Navbar activeTab="Transactions" onTabChange={handleNavigation} />
       </div>
 
       <main className="container mx-auto p-6 md:p-8 space-y-6">

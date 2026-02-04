@@ -21,7 +21,7 @@ export function Navbar({ activeTab, onTabChange }: NavbarProps) {
     { id: "new-order", label: "New Order", icon: ShoppingCart },
     { id: "stock", label: "Stock", icon: Package }, // ใช้ไอคอน Package สื่อถึงสต็อกสินค้า
     { id: "order-history", label: "Order History", icon: History },
-    { id: "reports", label: "Reports", icon: BarChart3 },
+    { id: "transactions", label: "Transactions", icon: BarChart3 },
   ];
 
   return (
