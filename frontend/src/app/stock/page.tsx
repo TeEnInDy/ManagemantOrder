@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { Navbar } from "@/components/Navbar";
@@ -26,7 +26,9 @@ import {
   Save,
   Loader2,
   DollarSign,
-  Calculator
+  Calculator,
+  UploadCloud, 
+  Check
 } from "lucide-react";
 import {
   Dialog,
@@ -54,6 +56,8 @@ export default function StockPage() {
   const [stockItems, setStockItems] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [stockSlip, setStockSlip] = useState<File | null>(null);
+  const stockFileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Calculations for KPI Cards ---
   const totalStockValue = stockItems.reduce((acc, item) => acc + (Number(item.quantity) * Number(item.costPerUnit)), 0);
@@ -108,19 +112,30 @@ export default function StockPage() {
     }
 
     try {
-        await axios.post("http://localhost:4000/api/stocks/restock-init", {
-            name: newItem.name,
-            category: newItem.category,
-            quantity: newItem.quantity,
-            unit: newItem.unit,
-            cost: newItem.totalCost, // ส่งราคารวมไป Backend หารเอง
+        const formData = new FormData();
+        formData.append("name", newItem.name);
+        formData.append("category", newItem.category);
+        formData.append("quantity", newItem.quantity.toString());
+        formData.append("unit", newItem.unit);
+        formData.append("cost", newItem.totalCost.toString());
+
+        // ✅ แนบไฟล์ถ้ามี
+        if (stockSlip) {
+            formData.append("slip", stockSlip);
+        }
+
+        await axios.post("http://localhost:4000/api/stocks/restock-init", formData, {
+            headers: { "Content-Type": "multipart/form-data" }
         });
         
         alert(`✅ เพิ่มสินค้า "${newItem.name}" เรียบร้อย!`);
         setIsAddModalOpen(false);
         fetchStocks();
+        // Reset Form
         setNewItem({ name: "", category: "Raw Material", quantity: 0, unit: "g", totalCost: 0 });
+        setStockSlip(null); // Reset File
     } catch (error) {
+        console.error(error);
         alert("❌ เพิ่มสินค้าไม่สำเร็จ");
     }
   };
@@ -408,6 +423,42 @@ export default function StockPage() {
                         {calculatedCostPerUnit > 0 ? calculatedCostPerUnit.toFixed(4) : "0.00"} บาท / {newItem.unit || "หน่วย"}
                     </span>
                  </div>
+              </div>
+              <div className="space-y-2">
+                  <label className="text-sm font-medium">หลักฐานการโอนเงิน (Slip)</label>
+                  <div 
+                      className="border-2 border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition"
+                      onClick={() => stockFileInputRef.current?.click()}
+                  >
+                      {stockSlip ? (
+                          <div className="flex items-center gap-2 text-green-600">
+                              <Check className="w-5 h-5" />
+                              <span className="text-sm font-medium truncate max-w-[200px]">{stockSlip.name}</span>
+                              <button 
+                                  onClick={(e) => { e.stopPropagation(); setStockSlip(null); }}
+                                  className="p-1 hover:bg-red-100 rounded-full text-red-500"
+                              >
+                                  <X className="w-4 h-4" />
+                              </button>
+                          </div>
+                      ) : (
+                          <>
+                              <UploadCloud className="w-8 h-8 text-zinc-400 mb-2" />
+                              <p className="text-xs text-zinc-500">คลิกเพื่อแนบสลิป (ถ้ามี)</p>
+                          </>
+                      )}
+                      <input 
+                          type="file" 
+                          ref={stockFileInputRef} 
+                          className="hidden" 
+                          accept="image/*" 
+                          onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                  setStockSlip(e.target.files[0]);
+                              }
+                          }} 
+                      />
+                  </div>
               </div>
             </div>
 

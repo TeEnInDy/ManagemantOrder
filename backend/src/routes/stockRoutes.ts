@@ -1,14 +1,42 @@
 import { Router } from 'express';
+import multer from 'multer';
+import path from 'path';
+import fs from 'fs';
 import { 
     getStocks, 
-    createStockInit, // ใช้ฟังก์ชันนี้สำหรับสร้างสินค้าใหม่ (แทน createStock เดิม)
+    createStockInit, 
     deleteStock,
-    restockItem,     // 🆕 เติมของ
-    useStockItem,    // 🆕 ตัดสต็อก
-    getStockHistory  // 🆕 ดูประวัติ
+    restockItem,     
+    useStockItem,    
+    getStockHistory  
 } from '../controllers/stockController';
 
+
+
 const router = Router();
+
+/// ==========================================
+// 🛠️ ตั้งค่า Multer
+// ==========================================
+// ใช้โฟลเดอร์เดียวกับ Order/Transaction เพื่อให้เป็นระเบียบ
+const slipUploadDir = path.join(__dirname, '../../uploads/slips');
+
+// สร้างโฟลเดอร์ถ้ายังไม่มี
+if (!fs.existsSync(slipUploadDir)){
+    fs.mkdirSync(slipUploadDir, { recursive: true });
+}
+
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, slipUploadDir);
+    },
+    filename: (req, file, cb) => {
+        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
+        cb(null, 'slip-' + uniqueSuffix + path.extname(file.originalname));
+    }
+});
+
+const upload = multer({ storage: storage });
 
 // 🟢 1. ดูภาพรวมสต็อก (GET)
 // URL: http://localhost:4000/api/stocks
@@ -16,7 +44,8 @@ router.get('/', getStocks);
 
 // 🟢 2. เพิ่มสินค้าใหม่ (POST) - ใช้ฟังก์ชัน createStockInit เพื่อคำนวณต้นทุนแรกเข้า
 // URL: http://localhost:4000/api/stocks
-router.post('/', createStockInit);
+router.post('/', upload.single('slip'), createStockInit);
+router.post('/restock-init', upload.single('slip'), createStockInit);
 
 // 🟢 2.1 Route สำรองสำหรับ Script หรือ Curl (POST) - ทำงานเหมือนข้างบน
 // URL: http://localhost:4000/api/stocks/restock-init

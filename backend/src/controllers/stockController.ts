@@ -37,72 +37,75 @@ export const getStocks = async (req: Request, res: Response) => {
 };
 
 // 🆕 2. สร้างสต็อกใหม่พร้อมบันทึกต้นทุนแรกเข้า (ใช้สำหรับ New Item / Curl Seed Data)
+// 🆕 2. สร้างสต็อกใหม่พร้อมบันทึกต้นทุน + สลิป
 export const createStockInit = async (req: Request, res: Response) => {
-  try {
-      const { name, category, quantity, unit, cost, costPerUnit: costPerUnitInput } = req.body; 
-      
-      await prisma.$transaction(async (tx) => {
-          const qty = parseFloat(quantity);
-          
-          // Logic: ถ้าส่ง cost (ราคารวม) มา ให้หาร quantity
-          // แต่ถ้าส่ง costPerUnit มาตรงๆ ก็ใช้เลย
-          let finalCostPerUnit = 0;
-          let totalCost = 0;
-
-          if (cost) {
-             totalCost = parseFloat(cost);
-             finalCostPerUnit = qty > 0 ? (totalCost / qty) : 0;
-          } else if (costPerUnitInput) {
-             finalCostPerUnit = parseFloat(costPerUnitInput);
-             totalCost = qty * finalCostPerUnit;
-          }
-
-          // 1. สร้างสินค้า
-          const newItem = await tx.stockItem.create({
-              data: {
-                  name,
-                  category: category || 'General',
-                  quantity: qty,
-                  unit,
-                  costPerUnit: finalCostPerUnit,
-                  lowStockThreshold: 5
-              }
-          });
-
-          // 2. บันทึก Log แรกเข้า
-          await tx.stockLog.create({
-              data: {
-                  stockItemId: newItem.id,
-                  type: 'RESTOCK', // ถือเป็นการเติมของครั้งแรก
-                  amount: qty,
-                  costAtTime: finalCostPerUnit,
-                  reason: 'Initial Stock / New Item'
-              }
-          });
-
-          // 3. ลงบัญชีรายจ่าย (Expense)
-          if (totalCost > 0) {
-            await tx.transaction.create({
+    try {
+        const { name, category, quantity, unit, cost, costPerUnit: costPerUnitInput } = req.body; 
+        
+        // ✅ ดึง Path รูปภาพ (ถ้ามี)
+        const slipImage = req.file ? `/uploads/slips/${req.file.filename}` : null;
+  
+        await prisma.$transaction(async (tx) => {
+            const qty = parseFloat(quantity);
+            
+            let finalCostPerUnit = 0;
+            let totalCost = 0;
+  
+            if (cost) {
+               totalCost = parseFloat(cost);
+               finalCostPerUnit = qty > 0 ? (totalCost / qty) : 0;
+            } else if (costPerUnitInput) {
+               finalCostPerUnit = parseFloat(costPerUnitInput);
+               totalCost = qty * finalCostPerUnit;
+            }
+  
+            // 1. สร้างสินค้า
+            const newItem = await tx.stockItem.create({
                 data: {
-                    type: 'EXPENSE',
-                    amount: totalCost,
-                    category: 'Stock Purchase',
-                    description: `ซื้อสินค้าใหม่: ${name}`,
-                    createdAt: new Date()
+                    name,
+                    category: category || 'General',
+                    quantity: qty,
+                    unit,
+                    costPerUnit: finalCostPerUnit,
+                    lowStockThreshold: 5
                 }
             });
-          }
-
-          return newItem;
-      });
-
-      res.status(201).json({ message: "✅ Stock created successfully" });
-
-  } catch (error) {
-      console.error("Init Stock Error:", error);
-      res.status(500).json({ error: "Failed to create stock" });
-  }
-};
+  
+            // 2. บันทึก Log แรกเข้า
+            await tx.stockLog.create({
+                data: {
+                    stockItemId: newItem.id,
+                    type: 'RESTOCK',
+                    amount: qty,
+                    costAtTime: finalCostPerUnit,
+                    reason: 'Initial Stock / New Item'
+                }
+            });
+  
+            // 3. ลงบัญชีรายจ่าย (Expense) + 📎 แนบสลิป
+            if (totalCost > 0) {
+              await tx.transaction.create({
+                  data: {
+                      type: 'EXPENSE',
+                      amount: totalCost,
+                      category: 'Stock Purchase',
+                      description: `ซื้อสินค้าใหม่: ${name}`,
+                      slipImage: slipImage, // 👈 บันทึก path รูปตรงนี้
+                      createdAt: new Date()
+                  }
+              });
+            }
+  
+            return newItem;
+        });
+  
+        res.status(201).json({ message: "✅ Stock created successfully" });
+  
+    } catch (error) {
+        console.error("Init Stock Error:", error);
+        res.status(500).json({ error: "Failed to create stock" });
+    }
+  };
 
 // ➕ 3. เติมของเพิ่ม (Restock) + คำนวณต้นทุนเฉลี่ย
 export const restockItem = async (req: Request, res: Response) => {
