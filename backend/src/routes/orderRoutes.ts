@@ -16,7 +16,7 @@ import {
 const router = Router();
 
 // --- 🛠️ ตั้งค่า Multer สำหรับสลิป ---
-const slipUploadDir = path.join(__dirname, '../../Asset/uploads/slips');
+const slipUploadDir = path.join(__dirname, '../../uploads/slips');
 
 // สร้างโฟลเดอร์ slips ถ้ายังไม่มี
 if (!fs.existsSync(slipUploadDir)){
@@ -32,7 +32,8 @@ const storage = multer.diskStorage({
         // หมายเหตุ: req.params.id อาจจะยังไม่มาในขั้นตอนนี้ ถ้าใช้ router.post('/:id/slip')
         // ดังนั้นใช้ Date.now() + random ก็พอ
         const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'slip-' + uniqueSuffix + path.extname(file.originalname));
+        const ext = path.extname(file.originalname);
+        cb(null, `slip-${uniqueSuffix}${ext}`);
     }
 });
 

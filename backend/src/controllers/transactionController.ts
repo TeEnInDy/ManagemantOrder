@@ -90,9 +90,14 @@ export const getFinancialReport = async (req: Request, res: Response) => {
 };
 
 // 2. เพิ่มรายการรายรับ/รายจ่าย (Manual)
+// 2. เพิ่มรายการรายรับ/รายจ่าย (Manual) + รองรับไฟล์ภาพ
 export const createTransaction = async (req: Request, res: Response) => {
   try {
+    // รับข้อมูลแบบ Multipart Form-Data
     const { type, amount, category, description } = req.body;
+    
+    // จัดการไฟล์รูป (ถ้ามี)
+    const slipPath = req.file ? `/uploads/slips/${req.file.filename}` : null;
 
     if (!amount || isNaN(amount)) {
       return res.status(400).json({ error: "Invalid amount" });
@@ -100,12 +105,14 @@ export const createTransaction = async (req: Request, res: Response) => {
 
     const newTx = await prisma.transaction.create({
       data: {
-        type,
+        type, // ต้องส่งเป็น 'EXPENSE' หรือ 'INCOME'
         amount: parseFloat(amount),
         category,
-        description
+        description,
+        slipImage: slipPath // 👈 บันทึกลงฐานข้อมูล
       }
     });
+    
     res.status(201).json(newTx);
   } catch (error) {
     console.error("Create Tx Error:", error);

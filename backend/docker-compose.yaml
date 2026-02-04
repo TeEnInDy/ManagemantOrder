@@ -1,0 +1,17 @@
+services:
+  db:
+    image: mysql:8.0
+    container_name: mysql-container
+    platform: linux/amd64
+    restart: always
+    environment:
+      # ใช้แค่ตัวนี้ตัวเดียวสำหรับการเป็น Root
+      MYSQL_ROOT_PASSWORD: root1234 
+      MYSQL_DATABASE: ManagemantOrder
+    ports:
+      - "3306:3306"
+    volumes:
+      - db_data:/var/lib/mysql
+
+volumes:
+  db_data:

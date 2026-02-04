@@ -115,6 +115,7 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
                         category: 'Sales',
                         description: `Order #${existing.id}`,
                         orderId: existing.id,
+                        slipImage: existing.slipImage,
                         createdAt: new Date() // เวลาปัจจุบัน
                     }
                 });

@@ -144,8 +144,9 @@ model Transaction {
   id          Int             @id @default(autoincrement())
   type        TransactionType // INCOME, EXPENSE
   amount      Decimal         @db.Decimal(10, 2)
-  category    String          // Sales, Stock Purchase, Salary
+  category    String          // Sales, Stock Purchase, Salary, Withdrawal
   description String?
+  slipImage   String?
   
   // Link กับ Order (Optional)
   orderId     Int?            @unique // 1 Order มีได้แค่ 1 Transaction รับเงิน

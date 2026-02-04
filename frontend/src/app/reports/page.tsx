@@ -1,157 +1,231 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
 import axios from "axios";
 import { Navbar } from "@/components/Navbar";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
-  Download,
-  Calendar,
-  CreditCard,
-  TrendingUp,
-  DollarSign,
-  Users,
-  Wallet,
-  Loader2,
-  ChevronRight,
-  RefreshCcw,
-  Wrench, // ใช้ icon นี้สื่อถึงการซ่อมแซมข้อมูล
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { 
+  // ✅ ต้อง import ให้ครบตามนี้ครับ
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription 
+} from "@/components/ui/dialog";
+import { 
+  Download, Search, ArrowUpCircle, ArrowDownCircle, Wrench, 
+  Calendar, Loader2, ChevronRight, PlusCircle, UploadCloud, X, Eye 
 } from "lucide-react";
-import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  Legend,
-} from "recharts";
 
-// --- TYPE DEFINITIONS ---
-interface FinancialSummary {
-  totalIncome: number;
-  totalExpense: number;
-  netProfit: number;
-  distribution: {
-    retainedEarnings: number;
-    dividendPool: number;
-    shares: {
-      teen_50: number;
-      pond_25: number;
-      beam_25: number;
-    };
-  } | null;
+// ... (Types และตัวแปรอื่นๆ เหมือนเดิม)
+interface Transaction {
+  id: number;
+  type: "INCOME" | "EXPENSE";
+  amount: number;
+  category: string;
+  description: string;
+  slipImage?: string | null;
+  createdAt: string;
 }
 
-export default function ReportsPage() {
-  const router = useRouter();
-  const [summary, setSummary] = useState<FinancialSummary | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [isError, setIsError] = useState(false);
+const BACKEND_URL = "http://localhost:4000";
 
-  // Filter State
-  const [reportTab, setReportTab] = useState("monthly");
+// ... (Helper function getWeeksInMonth เหมือนเดิม)
+const getWeeksInMonth = (month: number, year: number) => {
+  const weeks = [];
+  const firstDate = new Date(year, month - 1, 1);
+  const lastDate = new Date(year, month, 0);
+  let currentStart = new Date(firstDate);
+
+  while (currentStart <= lastDate) {
+    let currentEnd = new Date(currentStart);
+    currentEnd.setDate(currentStart.getDate() + 6);
+    if (currentEnd > lastDate) currentEnd = new Date(lastDate);
+
+    weeks.push({
+      start: new Date(currentStart).toISOString().split("T")[0],
+      end: new Date(currentEnd).toISOString().split("T")[0],
+      label: `Week ${weeks.length + 1} (${currentStart.getDate()} - ${currentEnd.getDate()})`,
+    });
+    currentStart.setDate(currentStart.getDate() + 7);
+  }
+  return weeks;
+};
+
+export default function TransactionsPage() {
+  const router = useRouter();
+  
+  // ... (States เดิมทั้งหมด)
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [filteredTx, setFilteredTx] = useState<Transaction[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [filterMode, setFilterMode] = useState("monthly");
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [selectedWeekIdx, setSelectedWeekIdx] = useState(0);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [typeFilter, setTypeFilter] = useState("ALL");
+  const [isWithdrawOpen, setIsWithdrawOpen] = useState(false);
+  const [withdrawForm, setWithdrawForm] = useState({
+    amount: "",
+    category: "Withdrawal",
+    description: "",
+  });
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isViewSlipOpen, setIsViewSlipOpen] = useState(false);
+  const [viewSlipUrl, setViewSlipUrl] = useState<string | null>(null);
 
-  // 📅 Helper: Calculate Weeks in Month
-  const getWeeksInMonth = (month: number, year: number) => {
-    const weeks = [];
-    const firstDate = new Date(year, month - 1, 1);
-    const lastDate = new Date(year, month, 0);
-    const currentStart = new Date(firstDate);
+  const weeks = useMemo(() => {
+    return getWeeksInMonth(selectedMonth, selectedYear);
+  }, [selectedMonth, selectedYear]);
 
-    while (currentStart <= lastDate) {
-      let currentEnd = new Date(currentStart);
-      currentEnd.setDate(currentStart.getDate() + 6);
-      if (currentEnd > lastDate) currentEnd = new Date(lastDate);
-
-      weeks.push({
-        start: new Date(currentStart).toISOString().split("T")[0],
-        end: new Date(currentEnd).toISOString().split("T")[0],
-        label: `Week ${weeks.length + 1} (${currentStart.getDate()} - ${currentEnd.getDate()} ${new Date(0, month - 1).toLocaleString("en-US", { month: "short" })})`,
-      });
-      currentStart.setDate(currentStart.getDate() + 7);
-    }
-    return weeks;
-  };
-
-  const weeks = getWeeksInMonth(selectedMonth, selectedYear);
-
-  // 🔄 Fetch Data Function
-  const fetchReportData = useCallback(async () => {
-    // ถ้าไม่ได้เป็นการ Auto-refresh (loading ยัง true) ให้เซ็ต error เป็น false ไว้ก่อน
-    if(loading) setIsError(false);
-    
-    try {
-      let params = new URLSearchParams();
-      if (reportTab === "monthly") {
-        params.append("month", selectedMonth.toString());
-        params.append("year", selectedYear.toString());
-      } else if (reportTab === "weekly") {
-        const week = weeks[selectedWeekIdx];
-        if (week) {
-          params.append("startDate", week.start);
-          params.append("endDate", week.end);
-        }
-      } else if (reportTab === "yearly") {
-        params.append("year", selectedYear.toString());
+  const buildQueryParams = useCallback(() => {
+    let params = new URLSearchParams();
+    if (filterMode === "monthly") {
+      params.append("month", selectedMonth.toString());
+      params.append("year", selectedYear.toString());
+    } else if (filterMode === "weekly") {
+      const week = weeks[selectedWeekIdx];
+      if (week) {
+        params.append("startDate", week.start);
+        params.append("endDate", week.end);
       }
+    } else if (filterMode === "yearly") {
+      params.append("year", selectedYear.toString());
+    }
+    return params;
+  }, [filterMode, selectedMonth, selectedYear, selectedWeekIdx, weeks]);
 
-      // ยิงไปที่ Route กลาง (transactionRoutes)
-      const res = await axios.get(`http://localhost:4000/api/transactions?${params.toString()}`);
-      setSummary(res.data.summary);
-      setIsError(false);
+  const fetchTransactions = useCallback(async () => {
+    try {
+      setLoading(true);
+      const params = buildQueryParams();
+      const res = await axios.get(`${BACKEND_URL}/api/transactions?${params.toString()}`);
+      const sorted = res.data.history.sort((a: any, b: any) => 
+        new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      );
+      setTransactions(sorted);
+      setFilteredTx(sorted);
     } catch (error) {
-      console.error("❌ Failed to fetch report:", error);
-      setIsError(true);
+      console.error("Failed to fetch transactions", error);
     } finally {
       setLoading(false);
     }
-  }, [reportTab, selectedMonth, selectedYear, selectedWeekIdx, weeks]);
+  }, [buildQueryParams]);
 
-  // 🔥 Real-time Auto-Refresh Logic
   useEffect(() => {
-    fetchReportData(); // โหลดครั้งแรก
+    fetchTransactions();
+  }, [fetchTransactions]);
 
-    const interval = setInterval(() => {
-      // Refresh เงียบๆ ทุก 5 วิ โดยใช้ params ชุดเดิม
-      let params = new URLSearchParams();
-      if (reportTab === "monthly") {
-        params.append("month", selectedMonth.toString());
-        params.append("year", selectedYear.toString());
-      } else if (reportTab === "weekly") {
-        const week = weeks[selectedWeekIdx];
-        if (week) {
-          params.append("startDate", week.start);
-          params.append("endDate", week.end);
+  useEffect(() => {
+    let result = transactions;
+    if (typeFilter !== "ALL") result = result.filter(t => t.type === typeFilter);
+    if (searchTerm) {
+      result = result.filter(t => 
+        t.category.toLowerCase().includes(searchTerm.toLowerCase()) || 
+        (t.description && t.description.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    }
+    setFilteredTx(result);
+  }, [searchTerm, typeFilter, transactions]);
+
+  // --- Handlers ---
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0];
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+    }
+  };
+
+  const handleWithdrawSubmit = async () => {
+    if (!withdrawForm.amount || isNaN(Number(withdrawForm.amount))) {
+      alert("กรุณาระบุจำนวนเงินให้ถูกต้อง");
+      return;
+    }
+    try {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append("type", "EXPENSE");
+      formData.append("amount", withdrawForm.amount);
+      formData.append("category", withdrawForm.category);
+      formData.append("description", withdrawForm.description);
+      if (selectedFile) formData.append("image", selectedFile);
+
+      await axios.post(`${BACKEND_URL}/api/transactions`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+
+      alert("✅ บันทึกรายการเบิกจ่ายสำเร็จ!");
+      setIsWithdrawOpen(false);
+      setWithdrawForm({ amount: "", category: "Withdrawal", description: "" });
+      setSelectedFile(null);
+      setPreviewUrl(null);
+      fetchTransactions();
+    } catch (error) {
+      console.error(error);
+      alert("❌ เกิดข้อผิดพลาดในการบันทึก");
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleViewSlip = (slipImage: string) => {
+    if (slipImage) {
+        let fullUrl = slipImage;
+        // 🛠️ แก้ไข Logic การสร้าง URL ให้ครอบคลุมทุกเคส
+        if (!slipImage.startsWith("http")) {
+            // 1. เปลี่ยน Backslash (\) เป็น Slash (/) เผื่อมาจาก Windows
+            let cleanPath = slipImage.replace(/\\/g, '/');
+            
+            // 2. ถ้าไม่มี / นำหน้า ให้เติม
+            if (!cleanPath.startsWith('/')) {
+                cleanPath = `/${cleanPath}`;
+            }
+
+            // 3. ต่อ String กับ Backend URL
+            // (Database อาจเก็บ /uploads/slips/xxx.jpg หรือ uploads/slips/xxx.jpg)
+            // เช็คว่าใน path มีคำว่า uploads ซ้ำไหม ถ้ามีให้ตัดออกตัวนึง
+            if (cleanPath.startsWith('/uploads/') && BACKEND_URL.endsWith('/')) {
+                 // กรณีกันพลาด (ไม่น่าเกิดถ้าวางระบบดี)
+            }
+            
+            fullUrl = `${BACKEND_URL}${cleanPath}`;
         }
-      } else if (reportTab === "yearly") {
-        params.append("year", selectedYear.toString());
-      }
+        
+        console.log("Opening Slip URL:", fullUrl); // 👈 ดู Log ใน Console ได้เลยถ้ารูปไม่ขึ้น
+        setViewSlipUrl(fullUrl);
+        setIsViewSlipOpen(true);
+    }
+  };
 
-      axios.get(`http://localhost:4000/api/transactions?${params.toString()}`)
-           .then(res => setSummary(res.data.summary))
-           .catch(() => {});
-    }, 5000); 
-
-    return () => clearInterval(interval);
-  }, [fetchReportData, reportTab, selectedMonth, selectedYear, weeks, selectedWeekIdx]);
-
+  const handleSyncData = async () => {
+    if (!confirm("⚠️ ต้องการ Sync ข้อมูลบัญชีกับสต็อกใหม่หรือไม่?")) return;
+    try {
+        await axios.post(`${BACKEND_URL}/api/transactions/fix-data`);
+        alert("Sync Completed!");
+        fetchTransactions();
+    } catch (e) { alert("Sync Failed"); }
+  };
 
   const handleNavigation = (tab: string) => {
     if (tab === "New Order") router.push("/");
@@ -161,260 +235,222 @@ export default function ReportsPage() {
     else if (tab === "Reports") router.push("/reports");
   };
 
-  // 🖨️ Export PDF Function
-  const handleExportPDF = () => {
-    let params = new URLSearchParams();
-    if (reportTab === "monthly") {
-      params.append("month", selectedMonth.toString());
-      params.append("year", selectedYear.toString());
-    } else if (reportTab === "weekly") {
-      const week = weeks[selectedWeekIdx];
-      if (week) {
-        params.append("startDate", week.start);
-        params.append("endDate", week.end);
-      }
-    } else if (reportTab === "yearly") {
-      params.append("year", selectedYear.toString());
-    }
-    // เปิดหน้าต่างใหม่เพื่อดาวน์โหลด PDF
-    window.open(`http://localhost:4000/api/transactions/export-pdf?${params.toString()}`, "_blank");
-  };
-
-  // 🛠️ Function: Fix Data Sync (ซ่อมข้อมูล)
-  const handleSyncData = async () => {
-    if (!confirm("⚠️ คำเตือน: ระบบจะลบรายจ่ายเก่าทั้งหมดทิ้ง และคำนวณใหม่จากสต็อกที่มีอยู่จริง เพื่อให้ยอดเงินตรงกัน 100%\n\nยืนยันหรือไม่?")) return;
-    
-    try {
-        setLoading(true);
-        // ยิงไปที่ Route /fix-data ตามที่ตั้งไว้ใน Backend
-        const res = await axios.post('http://localhost:4000/api/transactions/fix-data');
-        alert(`✅ ${res.data.message}`);
-        fetchReportData(); // โหลดข้อมูลใหม่ทันที
-    } catch (error) {
-        alert("❌ Sync Failed: ไม่สามารถเชื่อมต่อกับ Server ได้");
-    } finally {
-        setLoading(false);
-    }
-  };
-
-  const paymentPieData = [
-    { name: "Income", value: summary?.totalIncome || 0, color: "#22c55e" },
-    { name: "Expense", value: summary?.totalExpense || 0, color: "#ef4444" },
-  ];
-
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black font-sans">
       <div className="sticky top-0 z-50">
         <Navbar activeTab="Reports" onTabChange={handleNavigation} />
       </div>
 
-      <main className="container mx-auto p-6 md:p-8 space-y-8">
-        {/* Header */}
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+      <main className="container mx-auto p-6 md:p-8 space-y-6">
+        {/* Header & Filters (เหมือนเดิม) */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Reports & Analytics</h2>
-            <p className="text-zinc-500 dark:text-zinc-400">Real-time overview of your business performance.</p>
+            <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Transaction History</h2>
+            <p className="text-zinc-500">ตรวจสอบประวัติรายรับ-รายจ่ายย้อนหลัง</p>
           </div>
-          <div className="flex items-center gap-2">
-            {/* ปุ่ม Sync Data */}
-             <Button 
-                variant="outline" 
-                size="sm" 
-                onClick={handleSyncData} 
-                className="text-orange-600 border-orange-200 hover:bg-orange-50 gap-2"
-                title="กดปุ่มนี้เมื่อยอดเงินไม่ตรงกับสต็อกจริง"
-             >
-                <Wrench className="w-4 h-4"/> Fix Data
-             </Button>
-
-            <Button variant="outline" onClick={fetchReportData} className="gap-2">
-              <RefreshCcw className={`w-4 h-4 ${loading ? "animate-spin" : ""}`} /> Refresh
+          <div className="flex gap-2">
+            <Button variant="outline" className="gap-2 text-orange-600 border-orange-200" onClick={handleSyncData}>
+                <Wrench className="w-4 h-4" /> Fix Data
             </Button>
-            <Button onClick={handleExportPDF} className="bg-blue-600 hover:bg-blue-700 text-white gap-2 shadow-md">
+            <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white" 
+              onClick={() => window.open(`${BACKEND_URL}/api/transactions/export-pdf?${buildQueryParams().toString()}`, "_blank")}>
               <Download className="w-4 h-4" /> Export PDF
             </Button>
           </div>
         </div>
 
-        {/* Filters */}
-        <div className="space-y-4">
-          <Tabs defaultValue="monthly" onValueChange={setReportTab} className="w-full">
-            <TabsList className="bg-white dark:bg-zinc-900 border">
-              <TabsTrigger value="weekly">Weekly</TabsTrigger>
-              <TabsTrigger value="monthly">Monthly</TabsTrigger>
-              <TabsTrigger value="yearly">Yearly</TabsTrigger>
-            </TabsList>
-          </Tabs>
-
-          <div className="flex flex-wrap items-center gap-4 bg-white dark:bg-zinc-900 p-4 rounded-xl border shadow-sm">
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-zinc-400" />
-              <span className="text-sm font-medium">Filter by:</span>
-            </div>
-            
-            <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="p-2 rounded-lg border bg-zinc-50 text-sm outline-none focus:ring-2 focus:ring-blue-500">
-              {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
-            </select>
-
-            {reportTab !== "yearly" && (
-              <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="p-2 rounded-lg border bg-zinc-50 text-sm outline-none focus:ring-2 focus:ring-blue-500">
-                {Array.from({ length: 12 }, (_, i) => (
-                  <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString("en-US", { month: "long" })}</option>
-                ))}
-              </select>
-            )}
-
-            {reportTab === "weekly" && (
-              <div className="flex items-center gap-2">
-                <ChevronRight className="w-4 h-4 text-zinc-300" />
-                <select value={selectedWeekIdx} onChange={(e) => setSelectedWeekIdx(Number(e.target.value))} className="p-2 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-700 outline-none focus:ring-2 focus:ring-blue-500">
-                  {weeks.map((w, idx) => <option key={idx} value={idx}>{w.label}</option>)}
+        <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border shadow-sm space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+             <Tabs value={filterMode} onValueChange={setFilterMode} className="w-auto">
+                <TabsList>
+                  <TabsTrigger value="weekly">Weekly</TabsTrigger>
+                  <TabsTrigger value="monthly">Monthly</TabsTrigger>
+                  <TabsTrigger value="yearly">Yearly</TabsTrigger>
+                </TabsList>
+             </Tabs>
+             <div className="flex flex-wrap items-center gap-2">
+                <Calendar className="w-4 h-4 text-zinc-400 mr-1" />
+                <select value={selectedYear} onChange={(e) => setSelectedYear(Number(e.target.value))} className="p-2 rounded-md border bg-zinc-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                  {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
-              </div>
-            )}
+                {filterMode !== "yearly" && (
+                  <select value={selectedMonth} onChange={(e) => setSelectedMonth(Number(e.target.value))} className="p-2 rounded-md border bg-zinc-50 text-sm focus:ring-2 focus:ring-blue-500 outline-none">
+                    {Array.from({ length: 12 }, (_, i) => (
+                      <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString("en-US", { month: "short" })}</option>
+                    ))}
+                  </select>
+                )}
+                {filterMode === "weekly" && (
+                  <div className="flex items-center gap-2 animate-in fade-in">
+                    <ChevronRight className="w-4 h-4 text-zinc-300" />
+                    <select value={selectedWeekIdx} onChange={(e) => setSelectedWeekIdx(Number(e.target.value))} className="p-2 rounded-md border border-blue-200 bg-blue-50 text-blue-700 text-sm min-w-[140px]">
+                      {weeks.map((w, idx) => <option key={idx} value={idx}>{w.label}</option>)}
+                    </select>
+                  </div>
+                )}
+             </div>
           </div>
         </div>
 
-        {/* Content */}
-        {loading && !summary ? (
-          <div className="h-64 flex flex-col items-center justify-center text-zinc-500">
-            <Loader2 className="w-10 h-10 animate-spin mb-2 text-blue-500" />
-            <p>Loading financial data...</p>
-          </div>
-        ) : isError ? (
-          <div className="h-64 flex flex-col items-center justify-center text-red-500 bg-red-50 rounded-xl border border-red-100">
-            <p className="font-bold">Unable to load report data.</p>
-            <p className="text-sm text-red-400 mt-1">Check if the backend server is running.</p>
-            <Button variant="outline" size="sm" className="mt-4" onClick={fetchReportData}>Try Again</Button>
-          </div>
-        ) : (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-            {/* Key Metrics */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <SummaryCard title="Total Income" value={`฿${summary?.totalIncome.toLocaleString()}`} icon={DollarSign} color="text-green-600" trend="รายรับรวมทั้งหมด" />
-              <SummaryCard title="Total Expense" value={`฿${summary?.totalExpense.toLocaleString()}`} icon={CreditCard} color="text-red-600" trend="ต้นทุนสินค้าในสต็อก" />
-              <SummaryCard title="Net Profit" value={`฿${summary?.netProfit.toLocaleString()}`} icon={TrendingUp} color={summary?.netProfit && summary.netProfit >= 0 ? "text-blue-600" : "text-red-600"} trend="กำไรสุทธิ (Income - Expense)" />
-              <SummaryCard title="Shop Fund (50%)" value={`฿${summary?.distribution?.retainedEarnings.toLocaleString() || 0}`} icon={Wallet} sub="เงินหมุนเวียนเข้าร้าน" />
+        {/* Search & Withdraw */}
+        <div className="flex flex-col md:flex-row justify-between gap-4 items-end md:items-center">
+            <div className="flex flex-1 gap-4 w-full">
+                <div className="relative flex-1">
+                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+                    <Input placeholder="Search category or description..." className="pl-9 bg-white dark:bg-zinc-900" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+                </div>
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                    <SelectTrigger className="w-[180px] bg-white dark:bg-zinc-900"><SelectValue placeholder="All Types" /></SelectTrigger>
+                    <SelectContent>
+                    <SelectItem value="ALL">All Transactions</SelectItem>
+                    <SelectItem value="INCOME">Income</SelectItem>
+                    <SelectItem value="EXPENSE">Expense</SelectItem>
+                    </SelectContent>
+                </Select>
             </div>
 
-            {/* Dividend Card */}
-            <Card className="border-blue-100 shadow-md overflow-hidden bg-gradient-to-br from-white to-blue-50/30 dark:from-zinc-900 dark:to-zinc-900">
-              <CardHeader className="border-b border-blue-100 dark:border-zinc-800 pb-4">
-                <div className="flex items-center gap-2">
-                  <div className="p-2 bg-blue-100 rounded-lg dark:bg-blue-900/30">
-                    <Users className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                  </div>
-                  <div>
-                    <CardTitle>Dividend Distribution (เงินปันผล)</CardTitle>
-                    <CardDescription>คำนวณจาก 50% ของกำไรสุทธิ</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-6">
-                <div className="grid gap-6 md:grid-cols-3">
-                  <PartnerCard name="Teen" share="50%" amount={summary?.distribution?.shares.teen_50 || 0} color="bg-blue-600" />
-                  <PartnerCard name="Pond" share="25%" amount={summary?.distribution?.shares.pond_25 || 0} color="bg-cyan-500" />
-                  <PartnerCard name="Beam" share="25%" amount={summary?.distribution?.shares.beam_25 || 0} color="bg-indigo-500" />
-                </div>
-              </CardContent>
-            </Card>
+            <Dialog open={isWithdrawOpen} onOpenChange={setIsWithdrawOpen}>
+                <DialogTrigger asChild>
+                    <Button className="bg-red-600 hover:bg-red-700 text-white gap-2 shadow-sm whitespace-nowrap">
+                        <PlusCircle className="w-4 h-4" /> เบิกเงิน / บันทึกรายจ่าย
+                    </Button>
+                </DialogTrigger>
+                <DialogContent className="sm:max-w-[425px]">
+                    <DialogHeader>
+                        <DialogTitle>บันทึกการเบิกจ่าย (Expense)</DialogTitle>
+                    </DialogHeader>
+                    {/* ... (Form Withdraw เหมือนเดิม) ... */}
+                    <div className="grid gap-4 py-4">
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right">Amount</Label>
+                            <Input type="number" value={withdrawForm.amount} onChange={(e) => setWithdrawForm({...withdrawForm, amount: e.target.value})} placeholder="0.00" className="col-span-3" />
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right">Category</Label>
+                            <select className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={withdrawForm.category} onChange={(e) => setWithdrawForm({...withdrawForm, category: e.target.value})}>
+                                <option value="Withdrawal">Withdrawal (เบิกเงินสด)</option>
+                                <option value="Salary">Salary (เงินเดือน)</option>
+                                <option value="Stock Purchase">Stock Purchase (ซื้อของ)</option>
+                                <option value="Utility Bill">Utility Bill (ค่าน้ำ/ไฟ)</option>
+                                <option value="Maintenance">Maintenance (ซ่อมแซม)</option>
+                                <option value="Other">Other (อื่นๆ)</option>
+                            </select>
+                        </div>
+                        <div className="grid grid-cols-4 items-center gap-4">
+                            <Label className="text-right">Detail</Label>
+                            <Input value={withdrawForm.description} onChange={(e) => setWithdrawForm({...withdrawForm, description: e.target.value})} placeholder="รายละเอียด..." className="col-span-3" />
+                        </div>
+                        <div className="grid grid-cols-4 items-start gap-4">
+                            <Label className="text-right mt-2">Slip</Label>
+                            <div className="col-span-3">
+                                <div className="border-2 border-dashed border-zinc-300 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 transition" onClick={() => fileInputRef.current?.click()}>
+                                    {previewUrl ? (
+                                        <div className="relative">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img src={previewUrl} alt="Preview" className="h-32 object-contain rounded" />
+                                            <button onClick={(e) => { e.stopPropagation(); setPreviewUrl(null); setSelectedFile(null); }} className="absolute -top-2 -right-2 bg-red-500 text-white rounded-full p-1 shadow"><X className="w-3 h-3" /></button>
+                                        </div>
+                                    ) : (
+                                        <>
+                                            <UploadCloud className="w-8 h-8 text-zinc-400 mb-2" /><p className="text-xs text-zinc-500">Upload Slip</p>
+                                        </>
+                                    )}
+                                    <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter>
+                        <Button variant="outline" onClick={() => setIsWithdrawOpen(false)}>Cancel</Button>
+                        <Button onClick={handleWithdrawSubmit} disabled={isUploading} className="bg-red-600 hover:bg-red-700">{isUploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</> : "Confirm"}</Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+        </div>
 
-            {/* Charts */}
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-              <Card className="col-span-4 shadow-sm border-zinc-200 dark:border-zinc-800">
-                <CardHeader><CardTitle>Income Statement</CardTitle></CardHeader>
-                <CardContent className="h-[350px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <BarChart data={[
-                      { name: "Income", amount: summary?.totalIncome, fill: "#22c55e" },
-                      { name: "Expense", amount: summary?.totalExpense, fill: "#ef4444" },
-                      { name: "Profit", amount: summary?.netProfit, fill: "#3b82f6" },
-                    ]}>
-                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e5e7eb" />
-                      <XAxis dataKey="name" tick={{fill: '#6b7280'}} axisLine={false} tickLine={false} />
-                      <YAxis tickFormatter={(val) => `฿${val}`} tick={{fill: '#6b7280'}} axisLine={false} tickLine={false} />
-                      <Tooltip 
-                        formatter={(val: number) => `฿${val.toLocaleString()}`} 
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                      />
-                      <Bar dataKey="amount" radius={[6, 6, 0, 0]} barSize={60} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-
-              <Card className="col-span-3 shadow-sm border-zinc-200 dark:border-zinc-800">
-                <CardHeader><CardTitle>Financial Ratio</CardTitle></CardHeader>
-                <CardContent className="h-[350px]">
-                  <ResponsiveContainer width="100%" height="100%">
-                    <PieChart>
-                      <Pie 
-                        data={paymentPieData} 
-                        innerRadius={80} 
-                        outerRadius={110} 
-                        paddingAngle={5} 
-                        dataKey="value"
-                        stroke="none"
-                      >
-                        {paymentPieData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
-                      </Pie>
-                      <Tooltip formatter={(val: number) => `฿${val.toLocaleString()}`} />
-                      <Legend verticalAlign="bottom" height={36} iconType="circle" />
-                      {/* Center Text */}
-                      <text x="50%" y="50%" textAnchor="middle" dominantBaseline="middle" className="fill-zinc-900 dark:fill-white font-bold text-xl">
-                        {(summary?.totalIncome || 0) > (summary?.totalExpense || 0) ? "Profit" : "Loss"}
-                      </text>
-                    </PieChart>
-                  </ResponsiveContainer>
-                </CardContent>
-              </Card>
-            </div>
-          </div>
-        )}
+        {/* Table */}
+        <div className="rounded-xl border bg-white dark:bg-zinc-900 shadow overflow-hidden">
+          <Table>
+            <TableHeader className="bg-zinc-50 dark:bg-zinc-800">
+              <TableRow>
+                <TableHead>Date & Time</TableHead>
+                <TableHead>Type</TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead className="text-center">Slip</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {loading ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-10"><Loader2 className="animate-spin inline mr-2"/> Loading...</TableCell></TableRow>
+              ) : filteredTx.length === 0 ? (
+                <TableRow><TableCell colSpan={6} className="text-center py-10 text-zinc-500">No data found.</TableCell></TableRow>
+              ) : (
+                filteredTx.map((tx) => (
+                  <TableRow key={tx.id}>
+                    <TableCell className="font-medium text-zinc-500 text-sm">
+                      {new Date(tx.createdAt).toLocaleDateString('th-TH', { year: '2-digit', month: 'short', day: 'numeric' })}<br/>
+                      <span className="text-xs text-zinc-400">{new Date(tx.createdAt).toLocaleTimeString('th-TH', { hour: '2-digit', minute:'2-digit' })}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${tx.type === 'INCOME' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                        {tx.type === 'INCOME' ? <ArrowUpCircle className="w-3 h-3"/> : <ArrowDownCircle className="w-3 h-3"/>}{tx.type}
+                      </span>
+                    </TableCell>
+                    <TableCell>{tx.category}</TableCell>
+                    <TableCell className="text-zinc-500 text-sm max-w-[200px] truncate">{tx.description || "-"}</TableCell>
+                    <TableCell className="text-center">
+                        {tx.slipImage ? (
+                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50" onClick={() => handleViewSlip(tx.slipImage!)} title="View Slip">
+                                <Eye className="w-4 h-4" />
+                            </Button>
+                        ) : <span className="text-zinc-300">-</span>}
+                    </TableCell>
+                    <TableCell className={`text-right font-bold ${tx.type === 'INCOME' ? 'text-green-600' : 'text-red-600'}`}>
+                      {tx.type === 'EXPENSE' ? "-" : "+"}฿{Number(tx.amount).toLocaleString()}
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </main>
-    </div>
-  );
-}
 
-// Helper Components
-function SummaryCard({ title, value, icon: Icon, trend, sub, color }: any) {
-  return (
-    <Card className="shadow-sm border-zinc-200 dark:border-zinc-800 hover:shadow-md transition-shadow">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-zinc-500">{title}</CardTitle>
-        <div className={`p-2 rounded-full ${color ? color.replace('text-', 'bg-').replace('600', '100') : 'bg-zinc-100'}`}>
-            <Icon className={`h-4 w-4 ${color || "text-zinc-500"}`} />
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div className={`text-2xl font-bold ${color || "text-zinc-900 dark:text-zinc-100"}`}>{value}</div>
-        {trend && <p className="text-[11px] text-zinc-500 mt-1 font-medium">{trend}</p>}
-        {sub && <p className="text-[11px] text-zinc-400 mt-1">{sub}</p>}
-      </CardContent>
-    </Card>
-  );
-}
+      {/* 🔴 แก้ไข: View Slip Modal (เพิ่ม DialogHeader/Title แต่ซ่อนไว้) */}
+      <Dialog open={isViewSlipOpen} onOpenChange={setIsViewSlipOpen}>
+          <DialogContent className="sm:max-w-lg p-0 overflow-hidden bg-black/90 border-none">
+              
+              {/* ✅ เพิ่มส่วนนี้เพื่อแก้ Error Accessibility */}
+              <DialogHeader className="sr-only"> 
+                <DialogTitle>View Payment Slip</DialogTitle>
+                <DialogDescription>Image preview of the transaction slip</DialogDescription>
+              </DialogHeader>
 
-function PartnerCard({ name, share, amount, color }: any) {
-  return (
-    <div className="p-4 rounded-xl border border-zinc-100 bg-white dark:bg-zinc-800 dark:border-zinc-700 flex items-center justify-between shadow-sm hover:shadow-md transition-all hover:-translate-y-1">
-      <div className="flex items-center gap-3">
-        <div className={`w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-xl shadow-lg ${color}`}>
-            {name[0]}
-        </div>
-        <div>
-          <p className="font-bold text-zinc-900 dark:text-zinc-100">{name}</p>
-          <div className="flex items-center gap-1 mt-0.5">
-             <span className="text-[10px] bg-zinc-100 dark:bg-zinc-700 px-1.5 py-0.5 rounded text-zinc-500 font-medium">Share {share}</span>
-          </div>
-        </div>
-      </div>
-      <div className="text-right">
-        <p className={`text-lg font-bold ${amount > 0 ? "text-green-600 dark:text-green-400" : "text-zinc-400"}`}>
-            ฿{Math.round(amount).toLocaleString()}
-        </p>
-        <p className="text-[9px] text-zinc-400 uppercase tracking-wider font-semibold">Dividend</p>
-      </div>
+              <div className="relative w-full h-[80vh] flex items-center justify-center">
+                  {viewSlipUrl && (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img 
+                        src={viewSlipUrl} 
+                        alt="Payment Slip" 
+                        className="max-w-full max-h-full object-contain"
+                        onError={(e) => {
+                            // ถ้าโหลดรูปไม่ขึ้น ให้แสดง placeholder หรือแจ้งเตือน
+                            e.currentTarget.style.display = 'none';
+                            alert(`ไม่สามารถโหลดรูปภาพได้: ${viewSlipUrl}`);
+                        }}
+                      />
+                  )}
+                  <button 
+                    onClick={() => setIsViewSlipOpen(false)}
+                    className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white rounded-full p-2 backdrop-blur-sm transition-colors"
+                  >
+                      <X className="w-5 h-5" />
+                  </button>
+              </div>
+          </DialogContent>
+      </Dialog>
     </div>
   );
 }

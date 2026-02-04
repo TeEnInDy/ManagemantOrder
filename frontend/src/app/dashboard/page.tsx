@@ -1,265 +1,218 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
+import axios from "axios";
 import { Navbar } from "@/components/Navbar";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { 
-  DollarSign, 
-  CreditCard, 
-  Package, 
-  TrendingUp, 
-  TrendingDown,
-  Wallet
+import { Button } from "@/components/ui/button";
+import {
+  Download,
+  Calendar,
+  CreditCard,
+  TrendingUp,
+  DollarSign,
+  Users,
+  Wallet,
+  Loader2,
+  ChevronRight,
+  RefreshCcw,
+  Wrench,
 } from "lucide-react";
-import { 
-  AreaChart, 
-  Area, 
-  XAxis, 
-  YAxis, 
-  CartesianGrid, 
-  Tooltip, 
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
   ResponsiveContainer,
-  Legend
-} from 'recharts';
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+  PieChart,
+  Pie,
+  Cell,
+  Legend,
+} from "recharts";
 
-// --- MOCK DATA (จำลองข้อมูลสำหรับ รายวัน/รายเดือน/รายปี) ---
-
-const DATA_SETS = {
-  daily: {
-    kpi: { revenue: 12500, expense: 4500, items: 85, profit: 8000 },
-    chart: [
-      { name: '10:00', revenue: 500, expense: 200 },
-      { name: '12:00', revenue: 2400, expense: 800 },
-      { name: '14:00', revenue: 1800, expense: 600 },
-      { name: '16:00', revenue: 3200, expense: 1200 },
-      { name: '18:00', revenue: 2900, expense: 1000 },
-      { name: '20:00', revenue: 1700, expense: 700 },
-    ]
-  },
-  monthly: {
-    kpi: { revenue: 452000, expense: 180000, items: 3450, profit: 272000 },
-    chart: [
-      { name: 'Week 1', revenue: 95000, expense: 40000 },
-      { name: 'Week 2', revenue: 112000, expense: 45000 },
-      { name: 'Week 3', revenue: 108000, expense: 42000 },
-      { name: 'Week 4', revenue: 137000, expense: 53000 },
-    ]
-  },
-  yearly: {
-    kpi: { revenue: 5400000, expense: 2100000, items: 45200, profit: 3300000 },
-    chart: [
-      { name: 'Jan', revenue: 400000, expense: 150000 },
-      { name: 'Mar', revenue: 450000, expense: 180000 },
-      { name: 'Jun', revenue: 520000, expense: 200000 },
-      { name: 'Sep', revenue: 480000, expense: 190000 },
-      { name: 'Dec', revenue: 600000, expense: 250000 },
-    ]
-  }
-};
-
-const recentSales = [
-  { name: "Somchai (Table 5)", time: "Just now", amount: "+฿1,290", type: "Dine-in" },
-  { name: "Alice (Order #22)", time: "5 min ago", amount: "+฿450", type: "Takeaway" },
-  { name: "John Doe (Delivery)", time: "12 min ago", amount: "+฿890", type: "Delivery" },
-  { name: "Table 12", time: "25 min ago", amount: "+฿2,100", type: "Dine-in" },
-  { name: "Walk-in Customer", time: "40 min ago", amount: "+฿150", type: "Takeaway" },
-];
+// --- TYPE DEFINITIONS ---
+interface FinancialSummary {
+  totalIncome: number;
+  totalExpense: number;
+  netProfit: number;
+  distribution: {
+    retainedEarnings: number;
+    dividendPool: number;
+    shares: {
+      teen_50: number;
+      pond_25: number;
+      beam_25: number;
+    };
+  } | null;
+}
 
 export default function DashboardPage() {
-    const router = useRouter();
-  const [period, setPeriod] = useState<"daily" | "monthly" | "yearly">("daily");
-  
-  // ดึงข้อมูลตาม Tab ที่เลือก
-  const currentData = DATA_SETS[period];
-  const handleNavigation = (tab: string) => {
-    switch (tab) {
-      case "New Order":
-        router.push("/"); // กลับหน้าแรก
-        break;
-      case "Order History":
-        router.push("order-history");
-        break;
-      case "Reports":
-        router.push("/reports");
-        break;
-      case "Dashboard":
-        router.push("/dashboard");
-        break;
-        case "stock":
-            router.push("/stock");
-            break;
-      default:
-        console.log("Unknown tab:", tab);
+  const router = useRouter();
+  const [summary, setSummary] = useState<FinancialSummary | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [reportTab, setReportTab] = useState("monthly");
+  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
+  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+
+  // Fetch Data (ดึงเฉพาะ Summary มาแสดง)
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      let params = new URLSearchParams();
+      // Dashboard เน้นดูภาพรวมรายเดือนเป็นหลัก
+      params.append("month", selectedMonth.toString());
+      params.append("year", selectedYear.toString());
+
+      const res = await axios.get(`http://localhost:4000/api/transactions?${params.toString()}`);
+      setSummary(res.data.summary);
+    } catch (error) {
+      console.error("Failed to fetch dashboard:", error);
+    } finally {
+      setLoading(false);
     }
+  }, [selectedMonth, selectedYear]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  const handleNavigation = (tab: string) => {
+    if (tab === "New Order") router.push("/");
+    else if (tab === "Dashboard") router.push("/dashboard");
+    else if (tab === "Order History") router.push("/order-history");
+    else if (tab === "Stock") router.push("/stock");
+    else if (tab === "Reports") router.push("/reports"); // Reports ตอนนี้คือ Transaction
   };
+
+  const paymentPieData = [
+    { name: "Income", value: summary?.totalIncome || 0, color: "#22c55e" },
+    { name: "Expense", value: summary?.totalExpense || 0, color: "#ef4444" },
+  ];
+
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black font-sans">
       <div className="sticky top-0 z-50">
-        <Navbar 
-            activeTab="Dashboard" 
-            onTabChange={handleNavigation}
-        />
+        <Navbar activeTab="Dashboard" onTabChange={handleNavigation} />
       </div>
 
       <main className="container mx-auto p-6 md:p-8 space-y-8">
-        
-        {/* Header & Controls */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4">
           <div>
-            <h2 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">Dashboard Overview</h2>
-            <p className="text-zinc-500 dark:text-zinc-400">
-              Summary of your restaurant's performance.
-            </p>
+            <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Executive Dashboard</h2>
+            <p className="text-zinc-500">ภาพรวมสถานะการเงินของร้าน</p>
           </div>
           
-          {/* Tabs สำหรับเลือกช่วงเวลา */}
-          <Tabs defaultValue="daily" className="w-full md:w-auto" onValueChange={(val) => setPeriod(val as any)}>
-            <TabsList className="grid w-full grid-cols-3 md:w-[400px]">
-              <TabsTrigger value="daily">Today</TabsTrigger>
-              <TabsTrigger value="monthly">Monthly</TabsTrigger>
-              <TabsTrigger value="yearly">Yearly</TabsTrigger>
-            </TabsList>
-          </Tabs>
-        </div>
-
-        {/* --- KPI CARDS (แสดงผลตามช่วงเวลาที่เลือก) --- */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {/* 1. รายรับทั้งหมด */}
-          <KpiCard 
-            title="Total Revenue" 
-            value={`฿${currentData.kpi.revenue.toLocaleString()}`} 
-            icon={DollarSign}
-            description="Income from all sources"
-            trend="up"
-          />
-          
-          {/* 2. รายจ่ายทั้งหมด */}
-          <KpiCard 
-            title="Total Expenses" 
-            value={`฿${currentData.kpi.expense.toLocaleString()}`} 
-            icon={CreditCard}
-            description="Cost of goods & operations"
-            trend="down"
-            color="text-red-600"
-          />
-
-           {/* 3. กำไรสุทธิ (รายรับ - รายจ่าย) */}
-           <KpiCard 
-            title="Net Profit" 
-            value={`฿${currentData.kpi.profit.toLocaleString()}`} 
-            icon={Wallet}
-            description="Earnings after expenses"
-            trend="up"
-            color="text-green-600"
-          />
-
-          {/* 4. ขายไปกี่อย่าง (จำนวนสินค้า) */}
-          <KpiCard 
-            title="Total Items Sold" 
-            value={currentData.kpi.items.toLocaleString()} 
-            icon={Package}
-            description="Dishes & drinks served"
-            trend="up"
-          />
-        </div>
-
-        {/* --- MAIN CHART & ACTIVITY --- */}
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-          
-          {/* Revenue vs Expenses Chart (4/7) */}
-          <Card className="col-span-4 shadow-sm">
-            <CardHeader>
-              <CardTitle>Financial Overview</CardTitle>
-              <CardDescription>
-                Comparing Revenue vs Expenses ({period})
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="pl-0">
-              <div className="h-[350px] w-full">
-                <ResponsiveContainer width="100%" height="100%">
-                  <AreaChart data={currentData.chart} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
-                    <defs>
-                      <linearGradient id="colorRev" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#2563EB" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#2563EB" stopOpacity={0}/>
-                      </linearGradient>
-                      <linearGradient id="colorExp" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#DC2626" stopOpacity={0.8}/>
-                        <stop offset="95%" stopColor="#DC2626" stopOpacity={0}/>
-                      </linearGradient>
-                    </defs>
-                    <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
-                    <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(value) => `฿${value/1000}k`} />
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E4E4E7" />
-                    <Tooltip 
-                        contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        formatter={(value: number) => [`฿${value.toLocaleString()}`, '']}
-                    />
-                    <Legend verticalAlign="top" height={36}/>
-                    {/* เส้นรายรับ */}
-                    <Area type="monotone" dataKey="revenue" name="Revenue" stroke="#2563EB" fillOpacity={1} fill="url(#colorRev)" />
-                    {/* เส้นรายจ่าย */}
-                    <Area type="monotone" dataKey="expense" name="Expenses" stroke="#DC2626" fillOpacity={1} fill="url(#colorExp)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Recent Sales List (3/7) */}
-          <Card className="col-span-3 shadow-sm">
-            <CardHeader>
-              <CardTitle>Recent Transactions</CardTitle>
-              <CardDescription>Latest sales activity.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-8">
-                {recentSales.map((item, index) => (
-                  <div key={index} className="flex items-center">
-                    <Avatar className="h-9 w-9 bg-blue-100 flex items-center justify-center">
-                        {/* ใช้ Initial ตัวแรก */}
-                       <span className="text-blue-700 font-bold">{item.name[0]}</span>
-                    </Avatar>
-                    <div className="ml-4 space-y-1">
-                      <p className="text-sm font-medium leading-none">{item.name}</p>
-                      <p className="text-xs text-zinc-500">{item.time} • {item.type}</p>
-                    </div>
-                    <div className="ml-auto font-medium text-green-600">{item.amount}</div>
-                  </div>
+          <div className="flex items-center gap-2 bg-white dark:bg-zinc-900 p-2 rounded-lg border shadow-sm">
+             <Calendar className="w-4 h-4 text-zinc-400" />
+             <select 
+               value={selectedMonth} 
+               onChange={(e) => setSelectedMonth(Number(e.target.value))} 
+               className="bg-transparent text-sm outline-none font-medium"
+             >
+                {Array.from({ length: 12 }, (_, i) => (
+                  <option key={i + 1} value={i + 1}>{new Date(0, i).toLocaleString("en-US", { month: "long" })}</option>
                 ))}
-              </div>
-            </CardContent>
-          </Card>
-
+             </select>
+             <select 
+               value={selectedYear} 
+               onChange={(e) => setSelectedYear(Number(e.target.value))} 
+               className="bg-transparent text-sm outline-none font-medium"
+             >
+               {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+             </select>
+             <Button size="icon" variant="ghost" onClick={fetchDashboardData}>
+               <RefreshCcw className="w-4 h-4" />
+             </Button>
+          </div>
         </div>
+
+        {loading ? (
+           <div className="flex justify-center py-20"><Loader2 className="animate-spin" /></div>
+        ) : (
+          <div className="space-y-8 animate-in fade-in">
+            {/* Key Metrics Cards */}
+            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+              <SummaryCard title="Total Income" value={`฿${summary?.totalIncome.toLocaleString()}`} icon={DollarSign} color="text-green-600" />
+              <SummaryCard title="Total Expense" value={`฿${summary?.totalExpense.toLocaleString()}`} icon={CreditCard} color="text-red-600" />
+              <SummaryCard title="Net Profit" value={`฿${summary?.netProfit.toLocaleString()}`} icon={TrendingUp} color={summary?.netProfit! >= 0 ? "text-blue-600" : "text-red-600"} />
+              <SummaryCard title="Shop Fund (50%)" value={`฿${summary?.distribution?.retainedEarnings.toLocaleString() || 0}`} icon={Wallet} color="text-orange-600" />
+            </div>
+
+            {/* Charts Section */}
+            <div className="grid gap-4 md:grid-cols-7">
+              {/* Bar Chart */}
+              <Card className="col-span-4">
+                <CardHeader><CardTitle>Income vs Expense</CardTitle></CardHeader>
+                <CardContent className="h-[300px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={[
+                      { name: "Income", amount: summary?.totalIncome, fill: "#22c55e" },
+                      { name: "Expense", amount: summary?.totalExpense, fill: "#ef4444" },
+                      { name: "Profit", amount: summary?.netProfit, fill: "#3b82f6" },
+                    ]}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} />
+                      <XAxis dataKey="name" axisLine={false} tickLine={false} />
+                      <YAxis tickFormatter={(val) => `฿${val}`} axisLine={false} tickLine={false} />
+                      <Tooltip formatter={(val: number) => `฿${val.toLocaleString()}`} cursor={{fill: 'transparent'}} />
+                      <Bar dataKey="amount" radius={[4, 4, 0, 0]} barSize={50} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              {/* Pie Chart & Partners */}
+              <div className="col-span-3 space-y-4">
+                 <Card className="h-full">
+                    <CardHeader><CardTitle>Profit Distribution</CardTitle></CardHeader>
+                    <CardContent>
+                       <div className="space-y-4">
+                          <PartnerRow name="Teen (50%)" amount={summary?.distribution?.shares.teen_50} color="bg-blue-500" />
+                          <PartnerRow name="Pond (25%)" amount={summary?.distribution?.shares.pond_25} color="bg-cyan-500" />
+                          <PartnerRow name="Beam (25%)" amount={summary?.distribution?.shares.beam_25} color="bg-indigo-500" />
+                       </div>
+                    </CardContent>
+                 </Card>
+              </div>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );
 }
 
-// --- KPI Card Component ---
-function KpiCard({ title, value, icon: Icon, description, trend, color }: any) {
+// Components ช่วยแสดงผล
+function SummaryCard({ title, value, icon: Icon, color }: any) {
   return (
-    <Card className="shadow-sm border-zinc-200 dark:border-zinc-800">
-      <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-zinc-600 dark:text-zinc-400">
-            {title}
-        </CardTitle>
-        <Icon className={`h-4 w-4 ${color || "text-zinc-500"}`} />
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <CardTitle className="text-sm font-medium text-zinc-500">{title}</CardTitle>
+        <Icon className={`h-4 w-4 ${color}`} />
       </CardHeader>
       <CardContent>
-        <div className={`text-2xl font-bold ${color || "text-zinc-900 dark:text-zinc-50"}`}>
-            {value}
-        </div>
-        <div className="flex items-center text-xs mt-1">
-            {trend === 'up' && <TrendingUp className="w-3 h-3 text-green-500 mr-1" />}
-            {trend === 'down' && <TrendingDown className="w-3 h-3 text-red-500 mr-1" />}
-            <span className="text-zinc-500">{description}</span>
-        </div>
+        <div className={`text-2xl font-bold ${color}`}>{value}</div>
       </CardContent>
     </Card>
   );
+}
+
+function PartnerRow({ name, amount, color }: any) {
+    return (
+        <div className="flex items-center justify-between p-2 rounded bg-zinc-50 dark:bg-zinc-800">
+            <div className="flex items-center gap-2">
+                <div className={`w-3 h-3 rounded-full ${color}`} />
+                <span className="text-sm font-medium">{name}</span>
+            </div>
+            <span className="font-bold text-green-600">฿{(amount || 0).toLocaleString()}</span>
+        </div>
+    )
 }
