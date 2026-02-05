@@ -1,0 +1,55 @@
+version: '3.8'
+
+services:
+  # 🗄️ 1. Database (MariaDB)
+  db:
+    image: mariadb:10.6
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: myrootpassword  # ⚠️ ตั้งรหัสผ่าน DB ตรงนี้
+      MYSQL_DATABASE: ebizuke_db
+    volumes:
+      - db_data:/var/lib/mysql # เก็บข้อมูลถาวร (ปิด container ข้อมูลไม่หาย)
+    networks:
+      - ebizuke-network
+
+  # ⚙️ 2. Backend API
+  backend:
+    build: ./backend
+    restart: always
+    ports:
+      - "4000:4000"
+    environment:
+      # ⚠️ สังเกตตรง host ต้องใช้ชื่อ service "db" แทน localhost
+      DATABASE_URL: mysql://root:myrootpassword@db:3306/ebizuke_db
+      JWT_SECRET: supersecretkey123
+      PORT: 4000
+    depends_on:
+      - db
+    volumes:
+      - ./backend/uploads:/app/uploads # ✅ Mount โฟลเดอร์ uploads ออกมาข้างนอก (รูปไม่หาย)
+    networks:
+      - ebizuke-network
+
+  # 🎨 3. Frontend (Next.js)
+  frontend:
+    build: ./frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      # ⚠️ ตรงนี้สำคัญ! ต้องใส่ IP ของ Server มหาลัย (เพราะ Browser ยิงจากเครื่องเรา ไม่ใช่จากใน Docker)
+      NEXT_PUBLIC_API_URL: http://IP_SERVER_ของท่าน:4000/api
+    depends_on:
+      - backend
+    networks:
+      - ebizuke-network
+
+# สร้าง Network ให้คุยกันเองได้
+networks:
+  ebizuke-network:
+    driver: bridge
+
+# สร้าง Volume สำหรับเก็บข้อมูล Database
+volumes:
+  db_data:
