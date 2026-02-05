@@ -6,7 +6,7 @@ services:
     image: mariadb:10.6
     restart: always
     environment:
-      MYSQL_ROOT_PASSWORD: myrootpassword  # ⚠️ ตั้งรหัสผ่าน DB ตรงนี้
+      MYSQL_ROOT_PASSWORD: root1234  # ⚠️ ตั้งรหัสผ่าน DB ตรงนี้
       MYSQL_DATABASE: ebizuke_db
     volumes:
       - db_data:/var/lib/mysql # เก็บข้อมูลถาวร (ปิด container ข้อมูลไม่หาย)
