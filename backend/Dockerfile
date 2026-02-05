@@ -16,7 +16,7 @@ RUN npx prisma generate
 
 # RUN npm run build 
 
-EXPOSE 4000
+EXPOSE 9098
 
 # ✅ เปลี่ยนคำสั่งรัน เป็นใช้ ts-node แทน
 CMD ["npx", "ts-node", "src/index.ts"]
