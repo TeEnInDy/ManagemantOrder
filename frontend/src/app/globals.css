@@ -1,7 +1,7 @@
 @import "tailwindcss";
-@import "tw-animate-css";
 @plugin "tailwindcss-animate";
 
+/* กำหนด Custom Variant สำหรับ Dark Mode */
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
@@ -124,4 +124,3 @@
     @apply bg-background text-foreground;
   }
 }
-
