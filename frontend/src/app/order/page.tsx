@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import heic2any from "heic2any";
 // ❌ ลบ import axios เดิม
 // ✅ import api และ SERVER_URL จากไฟล์ที่เราเพิ่งสร้าง
 import { api, SERVER_URL } from "@/lib/axios";
@@ -184,15 +185,50 @@ export default function Home() {
   };
 
   // ➕ 5. Add New Menu Item Function
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+
     if (file) {
-      setNewMenuImage(file);
+      let fileToProcess = file; // สร้างตัวแปรมารับไฟล์ (เผื่อต้องแปลง)
+
+      // 🔍 เช็คว่าเป็นไฟล์ตระกูล HEIC หรือไม่
+      if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
+        try {
+          // บอกให้ User รู้หน่อยว่ากำลังแปลงไฟล์ (ถ้ามี State Loading ก็เปิดตรงนี้ได้)
+          console.log("🔄 Detecting HEIC file, converting...");
+
+          // สั่งแปลงเป็น JPG
+          const convertedBlob = await heic2any({
+            blob: file,
+            toType: "image/jpeg",
+            quality: 0.8, // ปรับคุณภาพได้ (0.1 - 1.0)
+          });
+
+          // แปลง Blob กลับเป็น File Object
+          const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+
+          fileToProcess = new File(
+            [blob],
+            file.name.replace(/\.heic$/i, ".jpg"), // เปลี่ยนนามสกุลไฟล์
+            { type: "image/jpeg" }
+          );
+
+          console.log("✅ Converted to JPG successfully!");
+        } catch (error) {
+          console.error("❌ Failed to convert HEIC:", error);
+          alert("ไม่สามารถแปลงไฟล์ภาพได้ กรุณาลองใหม่หรือใช้ไฟล์ JPG/PNG");
+          return;
+        }
+      }
+
+      // ✅ ทำงานต่อด้วยไฟล์ที่ (อาจจะ) ถูกแปลงแล้ว
+      setNewMenuImage(fileToProcess);
+
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(fileToProcess);
     }
   };
 

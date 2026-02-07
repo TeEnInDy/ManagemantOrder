@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 // ❌ ลบ import axios เดิมออก
 // ✅ ใช้ api จาก lib/axios
 import { api } from "@/lib/axios";
+import heic2any from "heic2any";
 import { Navbar } from "@/components/Navbar";
 import {
   Table,
@@ -196,6 +197,50 @@ export default function StockPage() {
   const calculatedCostPerUnit = (newItem.quantity > 0 && newItem.totalCost > 0)
     ? (newItem.totalCost / newItem.quantity)
     : 0;
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+
+    if (file) {
+      let fileToProcess = file;
+
+      // 🔍 ตรวจสอบว่าเป็นไฟล์ HEIC หรือไม่
+      if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
+        try {
+          console.log("🔄 Detecting HEIC slip, converting...");
+          // แปลงไฟล์
+          const convertedBlob = await heic2any({
+            blob: file,
+            toType: "image/jpeg",
+            quality: 0.8,
+          });
+
+          const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+
+          // สร้าง File Object ใหม่ที่เป็น JPG
+          fileToProcess = new File(
+            [blob],
+            file.name.replace(/\.heic$/i, ".jpg"),
+            { type: "image/jpeg" }
+          );
+          console.log("✅ Slip converted to JPG!");
+        } catch (error) {
+          console.error("❌ Failed to convert HEIC:", error);
+          alert("ไม่สามารถแปลงไฟล์ HEIC ได้ กรุณาใช้ไฟล์ JPG/PNG");
+          return;
+        }
+      }
+
+      // ✅ เก็บไฟล์ที่แปลงแล้วลง State (เพื่อรอส่งใน handleAddItem)
+      setStockSlip(fileToProcess);
+
+      // สร้าง Preview
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setSlipPreview(reader.result as string); // อย่าลืมสร้าง State: const [slipPreview, setSlipPreview] = useState<string | null>(null);
+      };
+      reader.readAsDataURL(fileToProcess);
+    }
+  };
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black font-sans relative">
@@ -466,11 +511,7 @@ export default function StockPage() {
                     ref={stockFileInputRef}
                     className="hidden"
                     accept="image/*"
-                    onChange={(e) => {
-                      if (e.target.files && e.target.files[0]) {
-                        setStockSlip(e.target.files[0]);
-                      }
-                    }}
+                    onChange={handleFileChange}  // 👈 ต้องเรียกใช้ตรงนี้
                   />
                 </div>
               </div>

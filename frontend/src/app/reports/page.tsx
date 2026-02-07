@@ -4,6 +4,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation";
 // ✅ เปลี่ยนมาใช้ api และ SERVER_URL
 import { api, SERVER_URL } from "@/lib/axios";
+import heic2any from "heic2any";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -147,11 +148,42 @@ export default function TransactionsPage() {
 
   // --- Handlers ---
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+
+    if (file) {
+      let fileToProcess = file;
+
+      // 🔍 ตรวจสอบและแปลงไฟล์ HEIC สำหรับหน้า Transactions
+      if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
+        try {
+          console.log("🔄 Detecting HEIC slip, converting...");
+          const convertedBlob = await heic2any({
+            blob: file,
+            toType: "image/jpeg",
+            quality: 0.8,
+          });
+
+          const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+
+          fileToProcess = new File(
+            [blob],
+            file.name.replace(/\.heic$/i, ".jpg"),
+            { type: "image/jpeg" }
+          );
+          console.log("✅ Slip converted to JPG!");
+        } catch (error) {
+          console.error("❌ Failed to convert HEIC:", error);
+          alert("ไม่สามารถแปลงไฟล์ HEIC ได้ กรุณาใช้ไฟล์ JPG/PNG");
+          return;
+        }
+      }
+
+      // ✅ เก็บไฟล์ลง State เพื่อเตรียมส่งให้ Backend
+      setSelectedFile(fileToProcess);
+
+      // สร้าง Preview (ใช้ URL.createObjectURL ก็ได้ หรือ FileReader ก็ได้)
+      setPreviewUrl(URL.createObjectURL(fileToProcess));
     }
   };
 

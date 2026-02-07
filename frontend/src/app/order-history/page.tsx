@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
+import heic2any from "heic2any";
 // ✅ เปลี่ยนมาใช้ api ตัวกลาง (Port 9098)
 import { api, SERVER_URL } from "@/lib/axios";
 import { Navbar } from "@/components/Navbar";
@@ -121,15 +122,46 @@ export default function OrderHistoryPage() {
     setIsUploadModalOpen(true);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+
     if (file) {
-      setSlipFile(file);
+      let fileToProcess = file;
+
+      // 🔍 ตรวจสอบและแปลงไฟล์ HEIC
+      if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
+        try {
+          console.log("🔄 Detecting HEIC slip, converting...");
+          const convertedBlob = await heic2any({
+            blob: file,
+            toType: "image/jpeg",
+            quality: 0.8,
+          });
+
+          const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+
+          fileToProcess = new File(
+            [blob],
+            file.name.replace(/\.heic$/i, ".jpg"),
+            { type: "image/jpeg" }
+          );
+          console.log("✅ Slip converted to JPG!");
+        } catch (error) {
+          console.error("❌ Failed to convert HEIC:", error);
+          alert("ไม่สามารถแปลงไฟล์ HEIC ได้ กรุณาใช้ไฟล์ JPG/PNG");
+          return;
+        }
+      }
+
+      // ✅ เก็บไฟล์ที่ (อาจจะ) แปลงแล้วลง State
+      setSlipFile(fileToProcess);
+
+      // สร้าง Preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setSlipPreview(reader.result as string);
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(fileToProcess);
     }
   };
 
