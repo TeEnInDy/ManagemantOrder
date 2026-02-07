@@ -4,7 +4,6 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from "react"
 import { useRouter } from "next/navigation";
 // ✅ เปลี่ยนมาใช้ api และ SERVER_URL
 import { api, SERVER_URL } from "@/lib/axios";
-import heic2any from "heic2any";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -149,6 +148,7 @@ export default function TransactionsPage() {
   // --- Handlers ---
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const heic2any = (await import("heic2any")).default;
     const file = e.target.files?.[0];
 
     if (file) {

@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation";
 // ❌ ลบ import axios เดิมออก
 // ✅ ใช้ api จาก lib/axios
 import { api } from "@/lib/axios";
-import heic2any from "heic2any";
 import { Navbar } from "@/components/Navbar";
 import {
   Table,
@@ -198,6 +197,7 @@ export default function StockPage() {
     ? (newItem.totalCost / newItem.quantity)
     : 0;
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const heic2any = (await import("heic2any")).default;
     const file = e.target.files?.[0];
 
     if (file) {

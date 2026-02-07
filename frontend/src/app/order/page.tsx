@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import heic2any from "heic2any";
 // ❌ ลบ import axios เดิม
 // ✅ import api และ SERVER_URL จากไฟล์ที่เราเพิ่งสร้าง
 import { api, SERVER_URL } from "@/lib/axios";
@@ -186,6 +185,7 @@ export default function Home() {
 
   // ➕ 5. Add New Menu Item Function
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const heic2any = (await import("heic2any")).default;
     const file = e.target.files?.[0];
 
     if (file) {

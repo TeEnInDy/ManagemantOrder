@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import heic2any from "heic2any";
 // ✅ เปลี่ยนมาใช้ api ตัวกลาง (Port 9098)
 import { api, SERVER_URL } from "@/lib/axios";
 import { Navbar } from "@/components/Navbar";
@@ -123,6 +122,7 @@ export default function OrderHistoryPage() {
   };
 
   const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const heic2any = (await import("heic2any")).default;
     const file = e.target.files?.[0];
 
     if (file) {
