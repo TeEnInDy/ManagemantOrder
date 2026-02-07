@@ -2,7 +2,9 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
+// ❌ ลบ import axios เดิมออก
+// ✅ ใช้ api จาก lib/axios
+import { api } from "@/lib/axios";
 import { Navbar } from "@/components/Navbar";
 import {
   Table,
@@ -66,7 +68,7 @@ export default function StockPage() {
   // --- Modal States ---
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
-  // State สำหรับเพิ่มสินค้า (ใช้ totalCost เพื่อให้กรอกง่าย)
+  // State สำหรับเพิ่มสินค้า
   const [newItem, setNewItem] = useState({
     name: "",
     category: "Raw Material",
@@ -81,16 +83,21 @@ export default function StockPage() {
   const [cutReason, setCutReason] = useState("USE");
 
   // --- FETCH DATA ---
+  // --- FETCH DATA ---
   const fetchStocks = async () => {
     setLoading(true);
     try {
-      const res = await axios.get<any>("http://localhost:4000/api/stocks");
-      const mappedData = res.data.map((item: any) => ({
+      // ใช้ api.get เหมือนเดิม
+      const res = await api.get("/stocks");
+
+      // ✅ แก้ตรงนี้: เติม (res.data as any[]) เพื่อบอกว่าเป็น Array แน่ๆ
+      const mappedData = (res.data as any[]).map((item: any) => ({
         ...item,
         quantity: Number(item.quantity),
         costPerUnit: Number(item.costPerUnit),
         lowStockThreshold: item.lowStockThreshold || 5
       }));
+
       setStockItems(mappedData);
     } catch (error) {
       console.error("Failed to fetch stocks", error);
@@ -124,7 +131,8 @@ export default function StockPage() {
         formData.append("slip", stockSlip);
       }
 
-      await axios.post("http://localhost:4000/api/stocks/restock-init", formData, {
+      // ✅ ใช้ api.post แทน
+      await api.post("/stocks/restock-init", formData, {
         headers: { "Content-Type": "multipart/form-data" }
       });
 
@@ -144,7 +152,8 @@ export default function StockPage() {
   const handleDelete = async (id: number) => {
     if (!confirm("ยืนยันการลบรายการนี้?")) return;
     try {
-      await axios.delete(`http://localhost:4000/api/stocks/${id}`);
+      // ✅ ใช้ api.delete แทน
+      await api.delete(`/stocks/${id}`);
       fetchStocks();
     } catch (error) {
       alert("❌ ลบไม่สำเร็จ");
@@ -164,7 +173,8 @@ export default function StockPage() {
     if (!selectedStock || !cutAmount || Number(cutAmount) <= 0) return;
 
     try {
-      await axios.post(`http://localhost:4000/api/stocks/${selectedStock.id}/use`, {
+      // ✅ ใช้ api.post แทน
+      await api.post(`/stocks/${selectedStock.id}/use`, {
         amount: Number(cutAmount),
         type: cutReason === "WASTE" ? "WASTE" : "USE",
         reason: cutReason === "USE" ? "ปรุงอาหาร/ขาย" : (cutReason === "WASTE" ? "ของเสีย/หมดอายุ" : "เลี้ยงพนักงาน"),
@@ -174,6 +184,7 @@ export default function StockPage() {
       setIsCutModalOpen(false);
       fetchStocks();
     } catch (error: any) {
+      // ดักจับ error จาก api wrapper หรือ response
       alert(`❌ เกิดข้อผิดพลาด: ${error.response?.data?.error || error.message}`);
     }
   };
@@ -190,11 +201,14 @@ export default function StockPage() {
     <div className="min-h-screen bg-zinc-50 dark:bg-black font-sans relative">
       <div className="sticky top-0 z-40">
         <Navbar activeTab="Stock" onTabChange={(tab) => {
-          if (tab === "New Order") router.push("/order");
-          else if (tab === "Dashboard") router.push("/dashboard");
-          else if (tab === "Order History") router.push("/order-history");
-          else if (tab === "Stock") router.push("/stock");
-          else if (tab === "Transactions") router.push("/reports");
+          const routes: Record<string, string> = {
+            "New Order": "/",
+            Dashboard: "/dashboard",
+            "Order History": "/order-history",
+            Transactions: "/reports",
+            Stock: "/stock",
+          };
+          if (routes[tab]) router.push(routes[tab]);
         }} />
       </div>
 
@@ -217,7 +231,7 @@ export default function StockPage() {
           </div>
         </div>
 
-        {/* --- KPI Cards (ส่วนที่คุณต้องการเก็บไว้) --- */}
+        {/* --- KPI Cards --- */}
         <div className="grid gap-4 md:grid-cols-3">
           <Card className="shadow-sm border-zinc-200 dark:border-zinc-800">
             <CardHeader className="flex flex-row items-center justify-between pb-2">

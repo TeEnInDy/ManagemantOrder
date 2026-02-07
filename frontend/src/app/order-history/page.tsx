@@ -1,21 +1,37 @@
 "use client";
 
-import React, { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
+// ✅ ใช้ api และ SERVER_URL เพื่อรองรับ Docker
+import { api, SERVER_URL } from "@/lib/axios";
 import { Navbar } from "@/components/Navbar";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+  Search,
+  Filter,
+  CheckCircle2,
+  XCircle,
+  ChefHat,
+  MoreVertical,
+  Upload,
+  FileText,
+  Loader2,
+  AlertCircle,
+} from "lucide-react";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Eye, Loader2, Check, X, Upload, Image as ImageIcon } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import {
   Dialog,
   DialogContent,
@@ -23,383 +39,310 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
 
 // --- TYPE DEFINITIONS ---
 interface OrderItem {
   id: number;
-  productName: string;
+  name: string;
   quantity: number;
-  priceAtTime: number;
+  price: number;
 }
 
 interface Order {
   id: number;
   customerName: string;
-  createdAt: string;
-  status: string;
   totalAmount: number;
+  status: "PENDING" | "COOKING" | "SERVED" | "PAID" | "CANCELLED";
   paymentMethod: string;
-  slipImage?: string; // Added field for slip image path
   items: OrderItem[];
+  createdAt: string;
+  slipImage?: string;
 }
-
-// Global constant for backend URL
-const BACKEND_URL = "http://localhost:4000";
 
 export default function OrderHistoryPage() {
   const router = useRouter();
   const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
 
-  // --- Upload Slip State ---
-  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false);
+  // State สำหรับ Upload Slip
+  const [isUploadOpen, setIsUploadOpen] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const [slipFile, setSlipFile] = useState<File | null>(null);
-  const [slipPreview, setSlipPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // --- View Slip State ---
-  const [isViewSlipOpen, setIsViewSlipOpen] = useState(false);
-  const [viewSlipUrl, setViewSlipUrl] = useState<string | null>(null);
-
-
-  const handleNavigation = (tab: string) => {
-    if (tab === "New Order") router.push("/order");
-    else if (tab === "Dashboard") router.push("/dashboard");
-    else if (tab === "Order History") router.push("/order-history");
-    else if (tab === "Stock") router.push("/stock");
-    else if (tab === "Transactions") router.push("/reports");
-  };
-
-  // --- 2. Fetch Orders from Backend ---
-  const fetchOrders = useCallback(async () => {
-    setIsLoading(true);
+  // 🔄 1. Fetch Orders
+  const fetchOrders = async () => {
     try {
-      const response = await axios.get<Order[]>(`${BACKEND_URL}/api/orders`);
-      setOrders(response.data);
+      setLoading(true);
+      // ✅ ใช้ api.get แทน axios.get
+      const res = await api.get("/orders");
+      const data = res.data as any[];
+
+      // Formatted Data & Fix Image URL
+      const formattedOrders = data.map((order: any) => {
+        let slipPath = order.slipImage;
+        // ✅ แก้ Logic รูปภาพให้ใช้ SERVER_URL (แก้รูปแตก)
+        if (slipPath && !slipPath.startsWith("http")) {
+          slipPath = `${SERVER_URL}${encodeURI(slipPath)}`;
+        }
+        return { ...order, slipImage: slipPath };
+      });
+
+      // เรียงจากใหม่ไปเก่า
+      setOrders(formattedOrders.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
     } catch (error) {
-      console.error("❌ Failed to fetch orders:", error);
+      console.error("Failed to fetch orders:", error);
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
-  }, []);
+  };
 
   useEffect(() => {
     fetchOrders();
-  }, [fetchOrders]);
+  }, []);
 
-  // 🔥 3. Update Status Function
-  const handleUpdateStatus = async (orderId: number, newStatus: string) => {
-    const confirmMsg = newStatus === 'Completed'
-      ? "Confirm to complete order? (This will record income)"
-      : "Confirm to cancel order?";
-
-    if (!confirm(confirmMsg)) return;
-
+  // 🔄 2. Update Status Function
+  const handleStatusUpdate = async (orderId: number, newStatus: string) => {
     try {
-      await axios.patch(`${BACKEND_URL}/api/orders/${orderId}/status`, {
-        status: newStatus
-      });
+      // ✅ ใช้ api.put แทน
+      await api.put(`/orders/${orderId}/status`, { status: newStatus });
 
-      alert(`✅ Order #${orderId} status updated to ${newStatus}!`);
-      fetchOrders();
+      // อัปเดต State ทันที (Optimistic Update)
+      setOrders((prev) =>
+        prev.map((o) => (o.id === orderId ? { ...o, status: newStatus as any } : o))
+      );
     } catch (error) {
-      console.error("Update failed:", error);
-      alert("❌ Failed to update status.");
+      console.error("Failed to update status:", error);
+      alert("❌ Failed to update status");
     }
   };
 
-  // --- 4. Upload Slip Functions ---
-  const openUploadModal = (orderId: number) => {
-    setSelectedOrderId(orderId);
-    setSlipFile(null);
-    setSlipPreview(null);
-    setIsUploadModalOpen(true);
-  };
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSlipFile(file);
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setSlipPreview(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
+  // 📤 3. Upload Slip Function
   const handleUploadSlip = async () => {
     if (!selectedOrderId || !slipFile) return;
 
-    setIsUploading(true);
-    const formData = new FormData();
-    formData.append("slip", slipFile);
-
     try {
-      await axios.post(`${BACKEND_URL}/api/orders/${selectedOrderId}/upload-slip`, formData, {
+      setIsUploading(true);
+      const formData = new FormData();
+      formData.append("slip", slipFile);
+
+      // ✅ ใช้ api.post แทน พร้อม Header
+      await api.post(`/orders/${selectedOrderId}/upload-slip`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
+
       alert("✅ Slip uploaded successfully!");
-      setIsUploadModalOpen(false);
-      fetchOrders(); // Refresh to see the new slip status
+      setIsUploadOpen(false);
+      setSlipFile(null);
+      fetchOrders(); // โหลดข้อมูลใหม่เพื่อแสดงรูป
     } catch (error) {
       console.error("Upload failed:", error);
-      alert("❌ Failed to upload slip.");
+      alert("❌ Upload failed");
     } finally {
       setIsUploading(false);
     }
   };
 
-  // --- 5. View Slip Function ---
-  const handleViewAction = (order: Order) => {
-      if (order.slipImage) {
-          // If slip exists, open the view modal
-          let fullUrl = order.slipImage;
-          if (order.slipImage && !order.slipImage.startsWith("http")) {
-              const cleanPath = order.slipImage.startsWith('/') ? order.slipImage : `/${order.slipImage}`;
-              fullUrl = `${BACKEND_URL}${cleanPath}`;
-          }
-          setViewSlipUrl(fullUrl);
-          setIsViewSlipOpen(true);
-      } else {
-          // If no slip, show alert or details
-          alert(`Order #${order.id} details: \nStatus: ${order.status}\nNo payment slip attached.`);
-      }
-  };
-
-
-  // Filter Logic
-  const filteredOrders = orders.filter((order) =>
-    order.id.toString().includes(searchTerm) ||
-    order.customerName.toLowerCase().includes(searchTerm.toLowerCase())
-  );
-
+  // Helper Functions
   const getStatusColor = (status: string) => {
-    switch (status) {
-      case "Completed": return "bg-green-100 text-green-700 border-green-200";
-      case "Pending": return "bg-yellow-100 text-yellow-700 border-yellow-200";
-      case "Cancelled": return "bg-red-100 text-red-700 border-red-200";
-      default: return "bg-blue-100 text-blue-700 border-blue-200";
-    }
+    const colors: Record<string, string> = {
+      PENDING: "bg-yellow-100 text-yellow-800 border-yellow-200",
+      COOKING: "bg-orange-100 text-orange-800 border-orange-200",
+      SERVED: "bg-blue-100 text-blue-800 border-blue-200",
+      PAID: "bg-green-100 text-green-800 border-green-200",
+      CANCELLED: "bg-red-100 text-red-800 border-red-200",
+    };
+    return colors[status] || "bg-gray-100 text-gray-800";
   };
+
+  const filteredOrders = orders.filter((order) => {
+    const matchesSearch =
+      order.customerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      order.id.toString().includes(searchTerm);
+    const matchesStatus = statusFilter === "ALL" || order.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="min-h-screen bg-zinc-50 dark:bg-black font-sans">
-      <div className="sticky top-0 z-50">
-        <Navbar activeTab="Order History" onTabChange={handleNavigation} />
+      <div className="sticky top-0 z-50 bg-white dark:bg-black border-b shadow-sm">
+        <Navbar
+          activeTab="Order History"
+          onTabChange={(tab) => {
+            const routes: Record<string, string> = {
+              "New Order": "/",
+              Dashboard: "/dashboard",
+              "Order History": "/order-history",
+              Transactions: "/reports",
+              Stock: "/stock",
+            };
+            if (routes[tab]) router.push(routes[tab]);
+          }}
+        />
       </div>
 
       <main className="container mx-auto p-6 md:p-8 space-y-6">
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        {/* Header & Filters */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-zinc-900 dark:text-zinc-50">
-              Order History
-            </h1>
-            <p className="text-zinc-500 dark:text-zinc-400">
-              Manage and view past transactions.
-            </p>
+            <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Order History</h1>
+            <p className="text-zinc-500">จัดการรายการสั่งซื้อและสถานะ</p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+            <div className="relative">
+              <Search className="absolute left-3 top-2.5 h-4 w-4 text-zinc-400" />
+              <Input
+                placeholder="Search order # or name..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 w-full sm:w-[250px] bg-white"
+              />
+            </div>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="h-10 px-3 rounded-md border border-input bg-white text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <option value="ALL">All Status</option>
+              <option value="PENDING">Pending</option>
+              <option value="COOKING">Cooking</option>
+              <option value="SERVED">Served</option>
+              <option value="PAID">Paid</option>
+              <option value="CANCELLED">Cancelled</option>
+            </select>
           </div>
         </div>
 
-        {/* Search & Table Card */}
-        <div className="bg-white dark:bg-zinc-900 rounded-xl border border-zinc-200 dark:border-zinc-800 shadow-sm overflow-hidden">
-          <div className="p-4 border-b dark:border-zinc-800 flex items-center gap-2">
-            <Search className="w-5 h-5 text-zinc-400" />
-            <Input
-              placeholder="Search by Order ID or Customer name..."
-              className="max-w-sm border-none shadow-none focus-visible:ring-0 px-0"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
+        {/* Orders List */}
+        {loading ? (
+          <div className="flex justify-center py-20"><Loader2 className="w-8 h-8 animate-spin text-blue-500" /></div>
+        ) : filteredOrders.length === 0 ? (
+          <div className="text-center py-20 text-zinc-400">No orders found.</div>
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            {filteredOrders.map((order) => (
+              <Card key={order.id} className="shadow-sm hover:shadow-md transition-shadow border-zinc-200 dark:border-zinc-800">
+                <CardHeader className="flex flex-row items-start justify-between pb-2">
+                  <div className="space-y-1">
+                    <CardTitle className="text-lg flex items-center gap-2">
+                      Order #{order.id}
+                      {order.slipImage && <FileText className="w-4 h-4 text-green-500" />}
+                    </CardTitle>
+                    <CardDescription>{new Date(order.createdAt).toLocaleString()}</CardDescription>
+                  </div>
+                  <Badge variant="outline" className={`${getStatusColor(order.status)} font-bold`}>
+                    {order.status}
+                  </Badge>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    {/* Customer Info */}
+                    <div className="flex justify-between text-sm">
+                      <span className="text-zinc-500">Customer:</span>
+                      <span className="font-medium">{order.customerName}</span>
+                    </div>
 
-          <div className="relative w-full overflow-auto">
-            <Table>
-              <TableHeader className="bg-zinc-50 dark:bg-zinc-800/50">
-                <TableRow>
-                  <TableHead className="w-[80px]">ID</TableHead>
-                  <TableHead>Date</TableHead>
-                  <TableHead>Customer</TableHead>
-                  <TableHead>Items</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Total Amount</TableHead>
-                  <TableHead className="text-center w-[150px]">Action</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoading ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-32 text-center">
-                      <div className="flex items-center justify-center gap-2">
-                        <Loader2 className="w-5 h-5 animate-spin" /> Loading orders...
+                    {/* Items List */}
+                    <div className="bg-zinc-50 dark:bg-zinc-900 p-3 rounded-lg space-y-2 max-h-[150px] overflow-y-auto">
+                      {order.items.map((item, idx) => (
+                        <div key={idx} className="flex justify-between text-sm">
+                          <span>{item.quantity}x {item.name}</span>
+                          <span className="text-zinc-500">฿{(item.price * item.quantity).toLocaleString()}</span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* Total & Action */}
+                    <div className="pt-2 border-t flex items-center justify-between">
+                      <div>
+                        <p className="text-xs text-zinc-500">Total Amount</p>
+                        <p className="text-xl font-bold text-blue-600">฿{order.totalAmount.toLocaleString()}</p>
                       </div>
-                    </TableCell>
-                  </TableRow>
-                ) : filteredOrders.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="h-24 text-center text-zinc-500">
-                      No orders found.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  filteredOrders.map((order) => (
-                    <TableRow key={order.id}>
-                      <TableCell className="font-medium">#{order.id}</TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {new Date(order.createdAt).toLocaleDateString("th-TH")}
-                        </div>
-                        <div className="text-xs text-zinc-400">
-                          {new Date(order.createdAt).toLocaleTimeString("th-TH", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-medium">{order.customerName}</div>
-                        <div className="text-xs text-zinc-400">
-                          {order.paymentMethod}
-                        </div>
-                      </TableCell>
-                      <TableCell>{order.items?.length || 0} items</TableCell>
-                      
-                      <TableCell>
-                        <Badge
-                          className={`${getStatusColor(
-                            order.status
-                          )} border px-2 py-0.5 rounded-full font-normal shadow-none`}
-                        >
-                          {order.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right font-bold text-blue-600">
-                        ฿{Number(order.totalAmount).toLocaleString()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-2">
-                            {/* Upload Slip Button (Always visible) */}
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 w-8 p-0 rounded-full border-zinc-200 text-zinc-500 hover:text-blue-600 hover:border-blue-200"
-                                title="Upload Slip"
-                                onClick={() => openUploadModal(order.id)}
-                            >
-                                <Upload className="w-4 h-4" />
-                            </Button>
 
-                            {order.status === "Pending" ? (
-                            <>
-                                <Button
-                                size="sm"
-                                className="bg-green-600 hover:bg-green-700 h-8 w-8 p-0 rounded-full"
-                                title="Complete Order"
-                                onClick={() => handleUpdateStatus(order.id, "Completed")}
-                                >
-                                <Check className="w-4 h-4 text-white" />
-                                </Button>
-                                <Button
-                                size="sm"
-                                variant="destructive"
-                                className="bg-red-600 hover:bg-red-700 h-8 w-8 p-0 rounded-full"
-                                title="Cancel Order"
-                                onClick={() => handleUpdateStatus(order.id, "Cancelled")}
-                                >
-                                <X className="w-4 h-4 text-white" />
-                                </Button>
-                            </>
-                            ) : (
-                            // Eye Button for Completed/Cancelled orders
-                            // Now triggers the slip view logic
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                className={`h-8 w-8 ${order.slipImage ? "text-blue-600 hover:text-blue-700 hover:bg-blue-50" : "text-zinc-400"}`}
-                                title={order.slipImage ? "View Slip" : "View Details"}
-                                onClick={() => handleViewAction(order)}
-                            >
-                                <Eye className="w-4 h-4" />
-                            </Button>
-                            )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="sm" className="h-8 w-8 p-0">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => handleStatusUpdate(order.id, "COOKING")}>
+                            <ChefHat className="mr-2 h-4 w-4" /> Start Cooking
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusUpdate(order.id, "SERVED")}>
+                            <CheckCircle2 className="mr-2 h-4 w-4" /> Mark as Served
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => { setSelectedOrderId(order.id); setIsUploadOpen(true); }}>
+                            <Upload className="mr-2 h-4 w-4" /> Upload Slip / Pay
+                          </DropdownMenuItem>
+                          <DropdownMenuItem onClick={() => handleStatusUpdate(order.id, "CANCELLED")} className="text-red-600">
+                            <XCircle className="mr-2 h-4 w-4" /> Cancel Order
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+
+                    {/* Show Slip Preview Button (If exists) */}
+                    {order.slipImage && (
+                      <Button
+                        variant="ghost"
+                        className="w-full text-xs text-blue-600 h-6 mt-1"
+                        onClick={() => window.open(order.slipImage, '_blank')}
+                      >
+                        View Payment Slip
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        </div>
+        )}
       </main>
 
-      {/* --- Upload Slip Modal --- */}
-      <Dialog open={isUploadModalOpen} onOpenChange={setIsUploadModalOpen}>
-        <DialogContent className="sm:max-w-md">
+      {/* Slip Upload Dialog */}
+      <Dialog open={isUploadOpen} onOpenChange={setIsUploadOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>Upload Payment Slip (Order #{selectedOrderId})</DialogTitle>
+            <DialogTitle>Confirm Payment</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4 py-4">
-             <div 
-                className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors h-64 relative"
-                onClick={() => fileInputRef.current?.click()}
-             >
-                {slipPreview ? (
-                    <>
-                        <img src={slipPreview} alt="Slip Preview" className="w-full h-full object-contain rounded-md" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity rounded-md">
-                            <p className="text-white font-medium">Click to change</p>
-                        </div>
-                    </>
-                ) : (
-                    <div className="flex flex-col items-center text-zinc-400 gap-2">
-                        <ImageIcon className="w-10 h-10" />
-                        <span className="text-sm">Click to upload slip image</span>
-                    </div>
-                )}
-                <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    accept="image/*" 
-                    onChange={handleFileChange} 
-                />
-             </div>
+          <div className="space-y-4 py-4">
+            <div
+              className="border-2 border-dashed rounded-lg p-8 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {slipFile ? (
+                <div className="text-center">
+                  <FileText className="w-12 h-12 text-blue-500 mx-auto mb-2" />
+                  <p className="text-sm font-medium">{slipFile.name}</p>
+                  <p className="text-xs text-zinc-500">Click to change</p>
+                </div>
+              ) : (
+                <div className="text-center text-zinc-400">
+                  <Upload className="w-12 h-12 mx-auto mb-2" />
+                  <p>Click to upload payment slip</p>
+                </div>
+              )}
+              <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={(e) => setSlipFile(e.target.files?.[0] || null)} />
+            </div>
+            <div className="flex items-center gap-2 p-3 bg-yellow-50 text-yellow-800 rounded-md text-sm">
+              <AlertCircle className="w-4 h-4" />
+              <span>This will also mark order as PAID</span>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsUploadModalOpen(false)}>Cancel</Button>
-            <Button onClick={handleUploadSlip} disabled={isUploading || !slipFile}>
-                {isUploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading...</> : "Upload"}
+            <Button variant="outline" onClick={() => setIsUploadOpen(false)}>Cancel</Button>
+            <Button onClick={handleUploadSlip} disabled={!slipFile || isUploading} className="bg-green-600 hover:bg-green-700 text-white">
+              {isUploading ? <Loader2 className="w-4 h-4 animate-spin" /> : "Confirm Payment"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* --- View Slip Modal --- */}
-      <Dialog open={isViewSlipOpen} onOpenChange={setIsViewSlipOpen}>
-          <DialogContent className="sm:max-w-lg p-0 overflow-hidden bg-black/90 border-none">
-              <div className="relative w-full h-[80vh] flex items-center justify-center">
-                  {viewSlipUrl && (
-                      <img 
-                        src={viewSlipUrl} 
-                        alt="Payment Slip" 
-                        className="max-w-full max-h-full object-contain"
-                      />
-                  )}
-                  <button 
-                    onClick={() => setIsViewSlipOpen(false)}
-                    className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white rounded-full p-2 backdrop-blur-sm transition-colors"
-                  >
-                      <X className="w-5 h-5" />
-                  </button>
-              </div>
-          </DialogContent>
-      </Dialog>
-
     </div>
   );
 }

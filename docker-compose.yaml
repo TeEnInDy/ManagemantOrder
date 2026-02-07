@@ -21,7 +21,7 @@ services:
       - "9098:9098"
     environment:
       # ⚠️ สังเกตตรง host ต้องใช้ชื่อ service "db" แทน localhost
-      DATABASE_URL: mysql://root:myrootpassword@db:3306/ebizuke_db
+      DATABASE_URL: mysql://root:root1234@db:3306/ebizuke_db
       JWT_SECRET: supersecretkey123
       PORT: 9098
     depends_on:
@@ -33,13 +33,19 @@ services:
 
   # 🎨 3. Frontend (Next.js)
   frontend:
-    build: ./frontend
+    build: 
+      context: ./frontend
+      # 👇 (สำคัญ) ส่งค่านี้เข้าไปตอน Build ด้วย ไม่งั้น Next.js จะไม่เห็นค่านี้
+      args:
+        # NEXT_PUBLIC_API_URL: http://dekdee2.informatics.buu.ac.th:9098/api
+        NEXT_PUBLIC_API_URL: http://localhost:9098/api
     restart: always
     ports:
-      -- "9099:3000"
+      - "9099:3000"
     environment:
       # ⚠️ ตรงนี้สำคัญ! ต้องใส่ IP ของ Server มหาลัย (เพราะ Browser ยิงจากเครื่องเรา ไม่ใช่จากใน Docker)
-      NEXT_PUBLIC_API_URL: http://dekdee2.informatics.buu.ac.th:9098/api
+      # - NEXT_PUBLIC_API_URL: http://dekdee2.informatics.buu.ac.th:9098/api
+      NEXT_PUBLIC_API_URL : http://localhost:9098/api
     depends_on:
       - backend
     networks:

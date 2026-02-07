@@ -2,14 +2,15 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-// import Image from "next/image"; // ใช้ Next.js Image
-import axios from "axios";
+// ✅ ลบ axios ตัวเก่าออก ใช้ api จาก lib/axios
+import { api } from "@/lib/axios";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Loader2, Lock, User, ChevronRight } from "lucide-react";
 
 export default function LoginPage() {
     const router = useRouter();
+    // ✅ เพิ่ม state สำหรับ form data
     const [form, setForm] = useState({ username: "", password: "" });
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState("");
@@ -20,14 +21,18 @@ export default function LoginPage() {
         setError("");
 
         try {
-            const res = await axios.post<any>("http://localhost:4000/api/auth/login", form);
+            // ✅ แก้จาก api.get เป็น api.post
+            // และส่ง form เป็น body (ไม่ต้องใส่ {})
+            const res = await api.post("/auth/login", form);
+
+            const data = res.data as any;
 
             // เก็บ Token ลง Cookie (สำหรับ Middleware)
-            document.cookie = `token=${res.data.token}; path=/; max-age=86400; SameSite=Lax`;
-
+            // หมายเหตุ: การ set cookie แบบนี้ใช้ได้ แต่ถ้า Production แนะนำให้ใช้ library 'js-cookie' หรือให้ Server set HttpOnly cookie จะปลอดภัยกว่า
+            document.cookie = `token=${data.token}; path=/; max-age=86400; SameSite=Lax`;
 
             // เก็บ User ลง LocalStorage (สำหรับโชว์ชื่อ)
-            localStorage.setItem("user", JSON.stringify(res.data.user));
+            localStorage.setItem("user", JSON.stringify(data.user));
 
             // ไปหน้า Dashboard
             router.push("/dashboard");
@@ -35,7 +40,8 @@ export default function LoginPage() {
 
         } catch (err: any) {
             console.error(err);
-            setError("ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
+            // แสดง Error message ที่ได้จาก Backend (ถ้ามี)
+            setError(err.response?.data?.message || "ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง");
         } finally {
             setLoading(false);
         }
@@ -55,7 +61,6 @@ export default function LoginPage() {
                     {/* กรอบล้อมรูปภาพเพื่อให้ดูเหมือนงานศิลปะ */}
                     <div className="p-4 bg-white shadow-xl rounded-sm border border-zinc-100 rotate-1 transition-transform hover:rotate-0 duration-500">
                         <div className="relative w-[280px] h-[500px] overflow-hidden bg-white">
-                            {/* ✅ ใช้ img ธรรมดาแทน (รูปขึ้นแน่นอน 100%) */}
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                                 src="/logo-vertical.jpg"
@@ -83,6 +88,7 @@ export default function LoginPage() {
                     {/* Header (Mobile Logo fallback) */}
                     <div className="text-center">
                         <div className="lg:hidden mx-auto w-20 h-20 relative mb-4 rounded-full overflow-hidden border-2 border-zinc-100 shadow-sm">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img src="/logo-vertical.jpg" alt="Logo" className="object-cover w-full h-full" />
                         </div>
                         <h1 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50 tracking-tight">
@@ -105,7 +111,7 @@ export default function LoginPage() {
                                         placeholder="Enter your username"
                                         className="pl-10 h-11 bg-zinc-50 border-zinc-200 focus:bg-white transition-all"
                                         value={form.username}
-                                        onChange={e => setForm({ ...form, username: e.target.value })}
+                                        onChange={(e) => setForm({ ...form, username: e.target.value })}
                                     />
                                 </div>
                             </div>
@@ -122,7 +128,7 @@ export default function LoginPage() {
                                         placeholder="Enter your password"
                                         className="pl-10 h-11 bg-zinc-50 border-zinc-200 focus:bg-white transition-all"
                                         value={form.password}
-                                        onChange={e => setForm({ ...form, password: e.target.value })}
+                                        onChange={(e) => setForm({ ...form, password: e.target.value })}
                                     />
                                 </div>
                             </div>
