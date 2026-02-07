@@ -235,9 +235,6 @@ export default function StockPage() {
 
       // สร้าง Preview
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setSlipPreview(reader.result as string); // อย่าลืมสร้าง State: const [slipPreview, setSlipPreview] = useState<string | null>(null);
-      };
       reader.readAsDataURL(fileToProcess);
     }
   };
