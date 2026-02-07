@@ -23,7 +23,7 @@ app.use(cors({
         "http://localhost:9099",      // Docker (Localhost)
         "http://dekdee2.informatics.buu.ac.th:9099" // Server มหาลัย (IP/Domain จริง)
     ],
-    methods: ["GET", "POST", "PUT", "DELETE"],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
     credentials: true // อนุญาตให้ส่ง Cookie/Auth Header
 }));
 
