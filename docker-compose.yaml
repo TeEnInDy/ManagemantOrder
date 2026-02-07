@@ -37,15 +37,15 @@ services:
       context: ./frontend
       # 👇 (สำคัญ) ส่งค่านี้เข้าไปตอน Build ด้วย ไม่งั้น Next.js จะไม่เห็นค่านี้
       args:
-        # NEXT_PUBLIC_API_URL: http://dekdee2.informatics.buu.ac.th:9098/api
-        NEXT_PUBLIC_API_URL: http://localhost:9098/api
+        NEXT_PUBLIC_API_URL: http://dekdee2.informatics.buu.ac.th:9098/api
+        # NEXT_PUBLIC_API_URL: http://localhost:9098/api
     restart: always
     ports:
       - "9099:3000"
     environment:
       # ⚠️ ตรงนี้สำคัญ! ต้องใส่ IP ของ Server มหาลัย (เพราะ Browser ยิงจากเครื่องเรา ไม่ใช่จากใน Docker)
-      # - NEXT_PUBLIC_API_URL: http://dekdee2.informatics.buu.ac.th:9098/api
-      NEXT_PUBLIC_API_URL : http://localhost:9098/api
+      NEXT_PUBLIC_API_URL: http://dekdee2.informatics.buu.ac.th:9098/api
+      # NEXT_PUBLIC_API_URL : http://localhost:9098/api
     depends_on:
       - backend
     networks:
