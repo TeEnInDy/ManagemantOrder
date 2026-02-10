@@ -2,8 +2,6 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-// ❌ ลบ import axios เดิม
-// ✅ import api และ SERVER_URL จากไฟล์ที่เราเพิ่งสร้าง
 import { api, SERVER_URL } from "@/lib/axios";
 import { Navbar } from "@/components/Navbar";
 import { ProductCatalog } from "@/components/ProductCatalog";
@@ -15,6 +13,7 @@ import {
   User,
   Image as ImageIcon,
   X,
+  Percent, // ✅ เพิ่มไอคอน Percent
 } from "lucide-react";
 import {
   Dialog,
@@ -42,8 +41,6 @@ interface CartItem extends Product {
   quantity: number;
 }
 
-// ❌ ลบ const BACKEND_URL ทิ้งไปเลย ไม่ใช้แล้ว
-
 export default function Home() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState("New Order");
@@ -52,6 +49,9 @@ export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // ✅ 1. เพิ่ม State สำหรับส่วนลด
+  const [discountPercentage, setDiscountPercentage] = useState(0);
 
   // --- Add New Menu Item State ---
   const [isAddMenuOpen, setIsAddMenuOpen] = useState(false);
@@ -64,22 +64,18 @@ export default function Home() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // 🔄 1. Fetch Products from Backend
+  // 🔄 Fetch Products
   const fetchProducts = async () => {
     try {
       setLoading(true);
-      // ✅ ใช้ api.get แทน (ไม่ต้องใส่ URL ยาวๆ แล้ว ใส่แค่ชื่อ path)
       const res = await api.get("/products");
       const data = res.data as any[];
 
       const formattedProducts = data.map((item: any) => {
         let imagePath = item.image || "/placeholder.png";
-
-        // ✅ แก้ Logic รูปภาพให้ใช้ SERVER_URL ที่มาจาก Docker
         if (imagePath && !imagePath.startsWith("http")) {
           imagePath = `${SERVER_URL}${encodeURI(imagePath)}`;
         }
-
         return {
           ...item,
           id: item.id.toString(),
@@ -103,7 +99,7 @@ export default function Home() {
     fetchProducts();
   }, []);
 
-  // 🛒 2. Cart Management Functions
+  // 🛒 Cart Management
   const handleAddToCart = (product: Product) => {
     setCartItems((prev) => {
       const existing = prev.find((item) => item.id === product.id);
@@ -135,7 +131,6 @@ export default function Home() {
     );
   };
 
-  // 🧭 3. Navigation Management
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     const routes: Record<string, string> = {
@@ -147,20 +142,35 @@ export default function Home() {
     if (routes[tab]) router.push(routes[tab]);
   };
 
-  const totalAmount = cartItems.reduce(
+  // ✅ 2. คำนวณยอดเงิน (Subtotal -> Discount -> Final Total)
+  const subtotal = cartItems.reduce(
     (sum, item) => sum + item.price * item.quantity,
     0
   );
+  const discountAmount = subtotal * (discountPercentage / 100);
+  const finalTotal = subtotal - discountAmount;
 
+  // 💳 Checkout
   // 💳 4. Checkout Function
   const handleCheckout = async () => {
     if (cartItems.length === 0) return;
     setIsProcessing(true);
 
     try {
+      // 1️⃣ สร้างข้อความระบุส่วนลด
+      const discountTag = discountPercentage > 0
+        ? ` (ลด ${discountPercentage}%)`
+        : "";
+
+      const discountNote = discountPercentage > 0
+        ? `ส่วนลด ${discountPercentage}% (-฿${discountAmount.toLocaleString()})`
+        : "";
+
       const orderPayload = {
-        customerName: customerName.trim() || "Walk-in Customer",
-        totalAmount: totalAmount,
+        // ✅ เทคนิค: แปะ % ส่วนลดต่อท้ายชื่อลูกค้าเลย (เพื่อให้ไปโชว์ในหน้า Transaction ชัวร์ๆ)
+        customerName: (customerName.trim() || "Walk-in Customer") + discountTag,
+
+        totalAmount: finalTotal,
         paymentMethod: "Cash",
         items: cartItems.map((item) => ({
           id: Number(item.id),
@@ -168,13 +178,17 @@ export default function Home() {
           quantity: item.quantity,
           price: item.price,
         })),
+        // ✅ ส่ง Note ไปเก็บใน Database ด้วย (เผื่อดูรายละเอียด)
+        note: discountNote,
       };
 
-      // ✅ ใช้ api.post แทน
       await api.post("/orders", orderPayload);
       alert("✅ Order sent to kitchen successfully!");
+
+      // Reset ค่าต่างๆ
       setCartItems([]);
       setCustomerName("");
+      setDiscountPercentage(0);
     } catch (error) {
       console.error("Checkout Failed:", error);
       alert("❌ Failed to send order. Please check backend connection.");
@@ -183,47 +197,33 @@ export default function Home() {
     }
   };
 
-  // ➕ 5. Add New Menu Item Function
+  // ➕ Add Menu Functions (HEIC Support included)
   const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const heic2any = (await import("heic2any")).default;
     const file = e.target.files?.[0];
 
     if (file) {
-      let fileToProcess = file; // สร้างตัวแปรมารับไฟล์ (เผื่อต้องแปลง)
-
-      // 🔍 เช็คว่าเป็นไฟล์ตระกูล HEIC หรือไม่
+      let fileToProcess = file;
       if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
         try {
-          // บอกให้ User รู้หน่อยว่ากำลังแปลงไฟล์ (ถ้ามี State Loading ก็เปิดตรงนี้ได้)
           console.log("🔄 Detecting HEIC file, converting...");
-
-          // สั่งแปลงเป็น JPG
           const convertedBlob = await heic2any({
             blob: file,
             toType: "image/jpeg",
-            quality: 0.8, // ปรับคุณภาพได้ (0.1 - 1.0)
+            quality: 0.8,
           });
-
-          // แปลง Blob กลับเป็น File Object
           const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
-
           fileToProcess = new File(
             [blob],
-            file.name.replace(/\.heic$/i, ".jpg"), // เปลี่ยนนามสกุลไฟล์
+            file.name.replace(/\.heic$/i, ".jpg"),
             { type: "image/jpeg" }
           );
-
-          console.log("✅ Converted to JPG successfully!");
         } catch (error) {
-          console.error("❌ Failed to convert HEIC:", error);
-          alert("ไม่สามารถแปลงไฟล์ภาพได้ กรุณาลองใหม่หรือใช้ไฟล์ JPG/PNG");
+          alert("Error converting HEIC file.");
           return;
         }
       }
-
-      // ✅ ทำงานต่อด้วยไฟล์ที่ (อาจจะ) ถูกแปลงแล้ว
       setNewMenuImage(fileToProcess);
-
       const reader = new FileReader();
       reader.onloadend = () => {
         setImagePreview(reader.result as string);
@@ -237,37 +237,28 @@ export default function Home() {
       alert("Please fill in at least the name and price.");
       return;
     }
-
     setIsUploading(true);
     const formData = new FormData();
     formData.append("name", newMenuName);
     formData.append("price", newMenuPrice);
     formData.append("category", newMenuCategory);
     formData.append("description", newMenuDescription);
-    if (newMenuImage) {
-      formData.append("image", newMenuImage);
-    }
+    if (newMenuImage) formData.append("image", newMenuImage);
 
     try {
-      // ✅ ใช้ api.post แทน
       await api.post("/products", formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       alert("✅ Menu item added successfully!");
       setIsAddMenuOpen(false);
-
-      // Reset Form
       setNewMenuName("");
       setNewMenuPrice("");
       setNewMenuCategory("Main");
       setNewMenuDescription("");
       setNewMenuImage(null);
       setImagePreview(null);
-
-      // Refresh Data
       fetchProducts();
     } catch (error) {
-      console.error("Failed to add menu item:", error);
       alert("❌ Failed to add menu item.");
     } finally {
       setIsUploading(false);
@@ -276,7 +267,6 @@ export default function Home() {
 
   return (
     <div className="flex h-screen w-full bg-zinc-50 dark:bg-black font-sans overflow-hidden">
-      {/* ... ส่วน UI เหมือนเดิมทุกอย่าง ... */}
       <div className="flex-1 flex flex-col h-full relative">
         <div className="w-full z-50 bg-white dark:bg-black border-b relative shadow-sm flex justify-between items-center pr-6">
           <div className="flex-1">
@@ -380,25 +370,66 @@ export default function Home() {
           )}
         </div>
 
-        <div className="p-6 border-t bg-white dark:bg-zinc-900">
-          <button
-            onClick={handleCheckout}
-            disabled={cartItems.length === 0 || isProcessing}
-            className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 disabled:cursor-not-allowed text-white rounded-2xl font-bold shadow-lg transition-all active:scale-[0.98] flex justify-center items-center gap-3 text-lg"
-          >
-            {isProcessing ? (
-              <>
-                <Loader2 className="w-5 h-5 animate-spin" />
-                <span>Processing...</span>
-              </>
-            ) : (
-              <span>Checkout (฿{totalAmount.toLocaleString()})</span>
+        {/* ✅ 3. ส่วน Summary และ Discount */}
+        <div className="p-6 border-t bg-white dark:bg-zinc-900 space-y-4">
+          <div className="space-y-2 text-sm">
+            <div className="flex justify-between text-zinc-500">
+              <span>Subtotal</span>
+              <span>฿{subtotal.toLocaleString()}</span>
+            </div>
+
+            {/* ตัวเลือกส่วนลด */}
+            <div className="flex justify-between items-center text-zinc-500">
+              <div className="flex items-center gap-2">
+                <Percent className="w-4 h-4" />
+                <span>Discount</span>
+              </div>
+              <select
+                className="border rounded-lg p-1 text-sm bg-zinc-50 dark:bg-zinc-800 outline-none focus:ring-2 focus:ring-blue-500"
+                value={discountPercentage}
+                onChange={(e) => setDiscountPercentage(Number(e.target.value))}
+              >
+                <option value="0">No Discount</option>
+                <option value="5">5%</option>
+                <option value="10">10%</option>
+                <option value="15">15%</option>
+                <option value="20">20%</option>
+                <option value="30">30%</option>
+                <option value="50">50%</option>
+                <option value="100">Free (100%)</option>
+              </select>
+            </div>
+
+            {/* แสดงยอดส่วนลด */}
+            {discountPercentage > 0 && (
+              <div className="flex justify-between text-red-500 font-medium">
+                <span>Discount ({discountPercentage}%)</span>
+                <span>-฿{discountAmount.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })}</span>
+              </div>
             )}
-          </button>
+          </div>
+
+          <div className="pt-2 border-t dark:border-zinc-800">
+            <button
+              onClick={handleCheckout}
+              disabled={cartItems.length === 0 || isProcessing}
+              className="w-full py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-zinc-300 disabled:cursor-not-allowed text-white rounded-2xl font-bold shadow-lg transition-all active:scale-[0.98] flex justify-center items-center gap-3 text-lg"
+            >
+              {isProcessing ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                // แสดงยอดสุทธิหลังหักส่วนลด
+                <span>Checkout (฿{finalTotal.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 2 })})</span>
+              )}
+            </button>
+          </div>
         </div>
       </aside>
 
-      {/* --- Add New Menu Item Dialog --- */}
+      {/* ... Dialog Add Menu (เหมือนเดิม) ... */}
       <Dialog open={isAddMenuOpen} onOpenChange={setIsAddMenuOpen}>
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
@@ -415,7 +446,7 @@ export default function Home() {
             </div>
             <div className="grid grid-cols-4 items-center gap-4">
               <Label htmlFor="category" className="text-right">Category</Label>
-              <select id="category" value={newMenuCategory} onChange={(e) => setNewMenuCategory(e.target.value)} className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+              <select id="category" value={newMenuCategory} onChange={(e) => setNewMenuCategory(e.target.value)} className="col-span-3 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
                 <option value="Main">Main Dish</option>
                 <option value="Side Dish">Side Dish</option>
                 <option value="Drink">Drink</option>
@@ -432,6 +463,7 @@ export default function Home() {
                 <div className="border-2 border-dashed rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors relative h-40" onClick={() => fileInputRef.current?.click()}>
                   {imagePreview ? (
                     <div className="relative w-full h-full">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img src={imagePreview} alt="Preview" className="w-full h-full object-cover rounded-md" />
                       <button onClick={(e) => { e.stopPropagation(); setNewMenuImage(null); setImagePreview(null); if (fileInputRef.current) fileInputRef.current.value = ""; }} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600 shadow-md"><X className="w-3 h-3" /></button>
                     </div>

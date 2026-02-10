@@ -8,8 +8,8 @@ const prisma = new PrismaClient();
 // 🟢 1. สร้างออเดอร์ใหม่ (Create Order)
 export const createOrder = async (req: Request, res: Response) => {
     try {
-        // รับข้อมูลจากหน้าเว็บ
-        const { customerName, items, totalAmount, paymentMethod, discordUserId, discordChannelId } = req.body;
+        // ✅ 1. รับ note มาด้วย
+        const { customerName, items, totalAmount, paymentMethod, discordUserId, discordChannelId, note } = req.body;
 
         // A. บันทึกลง Database MySQL
         const newOrder = await prisma.order.create({
@@ -17,33 +17,34 @@ export const createOrder = async (req: Request, res: Response) => {
                 customerName: customerName || "General Customer",
                 totalAmount: parseFloat(totalAmount),
                 paymentMethod: paymentMethod || "Cash",
-                status: "Pending", // ตรงกับ Enum ใน Schema
-                discordUserId: discordUserId,     // (Optional) เก็บไว้เผื่อ Bot ตอบกลับ
+                status: "Pending",
+                discordUserId: discordUserId,
                 discordChannelId: discordChannelId,
+                note: note, // ✅ 2. บันทึก Note (ส่วนลด) ลงใน Order ไว้ก่อน
 
-                // บันทึกรายการสินค้าลงตารางลูก (OrderItems)
                 items: {
                     create: items.map((item: any) => ({
                         productId: Number(item.id),
-                        productName: item.name,   // Snapshot ชื่อสินค้า ณ ตอนขาย
+                        productName: item.name,
                         quantity: Number(item.quantity),
-                        priceAtTime: parseFloat(item.price) // Snapshot ราคา ณ ตอนขาย
+                        priceAtTime: parseFloat(item.price)
                     }))
                 }
             },
-            include: { items: true } // ให้ส่งข้อมูลรายการกลับมาด้วย
+            include: { items: true }
         });
 
-        // B. 🔥 ยิงไปบอก Discord Bot (ที่ Port 4001)
-        // ใช้ setImmediate หรือไม่รอ await เพื่อให้หน้าเว็บตอบสนองเร็วขึ้น
+        // ❌ เอา Transaction ตรงนี้ออก (เพราะระบบคุณไปทำตอน Completed)
+
+        // B. ยิง Discord
         axios.post('http://localhost:4001/notify/new-order', {
             orderId: newOrder.id,
             totalAmount: newOrder.totalAmount,
             items: items,
-            customerName: newOrder.customerName
+            customerName: newOrder.customerName,
+            note: note // ส่ง Note ไปบอกใน Discord ด้วยก็ได้
         }).catch(err => console.error("⚠️ Failed to notify Discord Bot"));
 
-        // C. ตอบกลับหน้าเว็บ
         res.status(201).json(newOrder);
 
     } catch (error) {
@@ -55,7 +56,7 @@ export const createOrder = async (req: Request, res: Response) => {
 // 🟢 2. ดึงประวัติออเดอร์ทั้งหมด
 export const getOrders = async (req: Request, res: Response) => {
     try {
-        const { page = 1, limit = 50 } = req.query; // รองรับ Pagination ในอนาคต
+        const { page = 1, limit = 50 } = req.query;
         const orders = await prisma.order.findMany({
             take: Number(limit),
             skip: (Number(page) - 1) * Number(limit),
@@ -75,9 +76,7 @@ export const getOrderById = async (req: Request, res: Response) => {
         const order = await prisma.order.findUnique({
             where: { id: Number(id) },
             include: {
-                items: {
-                    include: { product: true } // ดึงข้อมูล Product จริงมาด้วยเผื่อเช็ครูป
-                }
+                items: { include: { product: true } }
             }
         });
 
@@ -88,7 +87,6 @@ export const getOrderById = async (req: Request, res: Response) => {
     }
 };
 
-// 🟢 4. อัปเดตสถานะออเดอร์ (Update Status)
 // 🟢 4. อัปเดตสถานะออเดอร์ (Real-time Income)
 export const updateOrderStatus = async (req: Request, res: Response) => {
     const { id } = req.params;
@@ -97,7 +95,6 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     try {
         if (status === 'Completed') {
             const result = await prisma.$transaction(async (tx) => {
-                // เช็คกันซ้ำ
                 const existing = await tx.order.findUnique({ where: { id: Number(id) } });
                 if (!existing || existing.status === 'Completed') throw new Error("Order handled");
 
@@ -107,27 +104,27 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
                     data: { status: 'Completed' }
                 });
 
-                // 2. 💰 บันทึกรายรับทันที (Real-time Income)
+                // 2. 💰 บันทึกรายรับทันที (เมื่อสถานะเป็น Completed)
                 await tx.transaction.create({
                     data: {
                         type: 'INCOME',
                         amount: existing.totalAmount,
                         category: 'Sales',
-                        description: `Order #${existing.id}`,
+                        
+                        // ✅ 3. แก้ตรงนี้: ให้ดึงชื่อลูกค้า (ที่มีส่วนลดติดมา) มาใส่ใน Description
+                        // (Frontend เราส่งชื่อแบบ "สมชาย (ลด 10%)" มาแล้ว มันจะมาโผล่ตรงนี้)
+                        description: `Order #${existing.id} : ${existing.customerName}`,
+                        
                         orderId: existing.id,
                         slipImage: existing.slipImage,
-                        createdAt: new Date() // เวลาปัจจุบัน
+                        createdAt: new Date()
                     }
                 });
-
-                // 3. 📦 ตัดสต็อก (Recipe Logic) - ถ้ามี
-                // ... (ใส่ Logic ตัดสต็อกตรงนี้) ...
 
                 return updated;
             });
             return res.json(result);
         } else {
-            // Cancel หรือสถานะอื่น ไม่ยุ่งกับเงิน
             const updated = await prisma.order.update({
                 where: { id: Number(id) },
                 data: { status }
@@ -139,15 +136,11 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
     }
 };
 
-// 🟢 5. (ใหม่!) Sync Transaction ย้อนหลัง (แก้ปัญหา Report เป็น 0)
+// 🟢 5. Sync Transaction ย้อนหลัง
 export const syncTransactions = async (req: Request, res: Response) => {
     try {
-        // 1. หา Order ที่จบแล้ว (Completed) แต่ยังไม่มีในบัญชี (Transaction)
         const ordersMissingTx = await prisma.order.findMany({
-            where: {
-                status: 'Completed',
-                transaction: null // ยังไม่มี Transaction ผูกอยู่
-            }
+            where: { status: 'Completed', transaction: null }
         });
 
         if (ordersMissingTx.length === 0) {
@@ -155,58 +148,38 @@ export const syncTransactions = async (req: Request, res: Response) => {
         }
 
         let count = 0;
-
-        // 2. วนลูปสร้างรายการบัญชีย้อนหลัง
         for (const order of ordersMissingTx) {
             await prisma.transaction.create({
                 data: {
                     type: 'INCOME',
-                    amount: order.totalAmount, // เอายอดจากออเดอร์มาใส่
+                    amount: order.totalAmount,
                     category: 'Sales',
-                    description: `Income from Order #${order.id} (Synced)`,
+                    // ✅ Sync ย้อนหลังก็เอาชื่อลูกค้ามาใส่ด้วย
+                    description: `Income from Order #${order.id} : ${order.customerName}`,
                     orderId: order.id,
-                    createdAt: order.updatedAt // ใช้วันที่เดียวกับตอนจบออเดอร์
+                    createdAt: order.updatedAt
                 }
             });
             count++;
         }
-
         res.json({ message: `🎉 กู้คืนข้อมูลสำเร็จ! สร้างรายการบัญชีเพิ่ม ${count} รายการ` });
-
     } catch (error) {
         console.error("Sync Error:", error);
         res.status(500).json({ error: "Failed to sync transactions" });
     }
 };
 
-// 🟢 6. (ใหม่!) อัปโหลดสลิปโอนเงิน (Upload Payment Slip)
+// 🟢 6. อัปโหลดสลิป
 export const uploadSlip = async (req: Request, res: Response) => {
     const { id } = req.params;
-
     try {
-        // ตรวจสอบว่ามีไฟล์ส่งมาไหม
-        if (!req.file) {
-            return res.status(400).json({ error: "No slip image uploaded" });
-        }
-
-        const slipPath = `/uploads/slips/${req.file.filename}`; // เก็บแยกโฟลเดอร์ slips เพื่อความเป็นระเบียบ
-
-        // อัปเดต path รูปสลิปลงใน Order
+        if (!req.file) return res.status(400).json({ error: "No slip image uploaded" });
+        const slipPath = `/uploads/slips/${req.file.filename}`;
         const updatedOrder = await prisma.order.update({
             where: { id: Number(id) },
-            data: { 
-                slipImage: slipPath,
-                // ถ้าอัปสลิปแล้ว อาจจะเปลี่ยนสถานะเป็น 'Paid' หรือ 'Checking' ก็ได้ (แล้วแต่ Flow ร้าน)
-                // status: 'Checking' 
-            }
+            data: { slipImage: slipPath }
         });
-
-        res.json({ 
-            message: "✅ Slip uploaded successfully", 
-            slipImage: slipPath,
-            order: updatedOrder 
-        });
-
+        res.json({ message: "✅ Slip uploaded successfully", slipImage: slipPath, order: updatedOrder });
     } catch (error) {
         console.error("Upload Slip Error:", error);
         res.status(500).json({ error: "Failed to upload slip" });
