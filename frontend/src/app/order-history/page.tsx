@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
+// ✅ เปลี่ยนมาใช้ api ตัวกลาง (Port 9098)
+import { api, SERVER_URL } from "@/lib/axios";
 import { Navbar } from "@/components/Navbar";
 import {
   Table,
@@ -39,12 +40,9 @@ interface Order {
   status: string;
   totalAmount: number;
   paymentMethod: string;
-  slipImage?: string; // Added field for slip image path
+  slipImage?: string;
   items: OrderItem[];
 }
-
-// Global constant for backend URL
-const BACKEND_URL = "http://localhost:4000";
 
 export default function OrderHistoryPage() {
   const router = useRouter();
@@ -64,20 +62,23 @@ export default function OrderHistoryPage() {
   const [isViewSlipOpen, setIsViewSlipOpen] = useState(false);
   const [viewSlipUrl, setViewSlipUrl] = useState<string | null>(null);
 
-
   const handleNavigation = (tab: string) => {
-    if (tab === "New Order") router.push("/order");
-    else if (tab === "Dashboard") router.push("/dashboard");
-    else if (tab === "Order History") router.push("/order-history");
-    else if (tab === "Stock") router.push("/stock");
-    else if (tab === "Transactions") router.push("/reports");
+    const routes: Record<string, string> = {
+      "New Order": "/",
+      Dashboard: "/dashboard",
+      "Order History": "/order-history",
+      Stock: "/stock",
+      Transactions: "/reports",
+    };
+    if (routes[tab]) router.push(routes[tab]);
   };
 
   // --- 2. Fetch Orders from Backend ---
   const fetchOrders = useCallback(async () => {
     setIsLoading(true);
     try {
-      const response = await axios.get<Order[]>(`${BACKEND_URL}/api/orders`);
+      // ✅ ใช้ api.get แทน (ตัด URL ยาวๆ ออก)
+      const response = await api.get<Order[]>("/orders");
       setOrders(response.data);
     } catch (error) {
       console.error("❌ Failed to fetch orders:", error);
@@ -99,7 +100,8 @@ export default function OrderHistoryPage() {
     if (!confirm(confirmMsg)) return;
 
     try {
-      await axios.patch(`${BACKEND_URL}/api/orders/${orderId}/status`, {
+      // ✅ ใช้ api.patch (Backend ต้องเปิดรับ PATCH ด้วยนะ)
+      await api.patch(`/orders/${orderId}/status`, {
         status: newStatus
       });
 
@@ -119,15 +121,47 @@ export default function OrderHistoryPage() {
     setIsUploadModalOpen(true);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const heic2any = (await import("heic2any")).default;
     const file = e.target.files?.[0];
+
     if (file) {
-      setSlipFile(file);
+      let fileToProcess = file;
+
+      // 🔍 ตรวจสอบและแปลงไฟล์ HEIC
+      if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
+        try {
+          console.log("🔄 Detecting HEIC slip, converting...");
+          const convertedBlob = await heic2any({
+            blob: file,
+            toType: "image/jpeg",
+            quality: 0.8,
+          });
+
+          const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+
+          fileToProcess = new File(
+            [blob],
+            file.name.replace(/\.heic$/i, ".jpg"),
+            { type: "image/jpeg" }
+          );
+          console.log("✅ Slip converted to JPG!");
+        } catch (error) {
+          console.error("❌ Failed to convert HEIC:", error);
+          alert("ไม่สามารถแปลงไฟล์ HEIC ได้ กรุณาใช้ไฟล์ JPG/PNG");
+          return;
+        }
+      }
+
+      // ✅ เก็บไฟล์ที่ (อาจจะ) แปลงแล้วลง State
+      setSlipFile(fileToProcess);
+
+      // สร้าง Preview
       const reader = new FileReader();
       reader.onloadend = () => {
         setSlipPreview(reader.result as string);
       };
-      reader.readAsDataURL(file);
+      reader.readAsDataURL(fileToProcess);
     }
   };
 
@@ -139,12 +173,13 @@ export default function OrderHistoryPage() {
     formData.append("slip", slipFile);
 
     try {
-      await axios.post(`${BACKEND_URL}/api/orders/${selectedOrderId}/upload-slip`, formData, {
+      // ✅ ใช้ api.post
+      await api.post(`/orders/${selectedOrderId}/upload-slip`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       alert("✅ Slip uploaded successfully!");
       setIsUploadModalOpen(false);
-      fetchOrders(); // Refresh to see the new slip status
+      fetchOrders();
     } catch (error) {
       console.error("Upload failed:", error);
       alert("❌ Failed to upload slip.");
@@ -155,21 +190,19 @@ export default function OrderHistoryPage() {
 
   // --- 5. View Slip Function ---
   const handleViewAction = (order: Order) => {
-      if (order.slipImage) {
-          // If slip exists, open the view modal
-          let fullUrl = order.slipImage;
-          if (order.slipImage && !order.slipImage.startsWith("http")) {
-              const cleanPath = order.slipImage.startsWith('/') ? order.slipImage : `/${order.slipImage}`;
-              fullUrl = `${BACKEND_URL}${cleanPath}`;
-          }
-          setViewSlipUrl(fullUrl);
-          setIsViewSlipOpen(true);
-      } else {
-          // If no slip, show alert or details
-          alert(`Order #${order.id} details: \nStatus: ${order.status}\nNo payment slip attached.`);
+    if (order.slipImage) {
+      let fullUrl = order.slipImage;
+      // ✅ ใช้ SERVER_URL จาก lib/axios
+      if (order.slipImage && !order.slipImage.startsWith("http")) {
+        const cleanPath = order.slipImage.startsWith('/') ? order.slipImage : `/${order.slipImage}`;
+        fullUrl = `${SERVER_URL}${cleanPath}`;
       }
+      setViewSlipUrl(fullUrl);
+      setIsViewSlipOpen(true);
+    } else {
+      alert(`Order #${order.id} details: \nStatus: ${order.status}\nNo payment slip attached.`);
+    }
   };
-
 
   // Filter Logic
   const filteredOrders = orders.filter((order) =>
@@ -267,7 +300,7 @@ export default function OrderHistoryPage() {
                         </div>
                       </TableCell>
                       <TableCell>{order.items?.length || 0} items</TableCell>
-                      
+
                       <TableCell>
                         <Badge
                           className={`${getStatusColor(
@@ -282,50 +315,47 @@ export default function OrderHistoryPage() {
                       </TableCell>
                       <TableCell className="text-center">
                         <div className="flex items-center justify-center gap-2">
-                            {/* Upload Slip Button (Always visible) */}
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                className="h-8 w-8 p-0 rounded-full border-zinc-200 text-zinc-500 hover:text-blue-600 hover:border-blue-200"
-                                title="Upload Slip"
-                                onClick={() => openUploadModal(order.id)}
-                            >
-                                <Upload className="w-4 h-4" />
-                            </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-8 w-8 p-0 rounded-full border-zinc-200 text-zinc-500 hover:text-blue-600 hover:border-blue-200"
+                            title="Upload Slip"
+                            onClick={() => openUploadModal(order.id)}
+                          >
+                            <Upload className="w-4 h-4" />
+                          </Button>
 
-                            {order.status === "Pending" ? (
+                          {order.status === "Pending" ? (
                             <>
-                                <Button
+                              <Button
                                 size="sm"
                                 className="bg-green-600 hover:bg-green-700 h-8 w-8 p-0 rounded-full"
                                 title="Complete Order"
                                 onClick={() => handleUpdateStatus(order.id, "Completed")}
-                                >
+                              >
                                 <Check className="w-4 h-4 text-white" />
-                                </Button>
-                                <Button
+                              </Button>
+                              <Button
                                 size="sm"
                                 variant="destructive"
                                 className="bg-red-600 hover:bg-red-700 h-8 w-8 p-0 rounded-full"
                                 title="Cancel Order"
                                 onClick={() => handleUpdateStatus(order.id, "Cancelled")}
-                                >
+                              >
                                 <X className="w-4 h-4 text-white" />
-                                </Button>
+                              </Button>
                             </>
-                            ) : (
-                            // Eye Button for Completed/Cancelled orders
-                            // Now triggers the slip view logic
+                          ) : (
                             <Button
-                                variant="ghost"
-                                size="icon"
-                                className={`h-8 w-8 ${order.slipImage ? "text-blue-600 hover:text-blue-700 hover:bg-blue-50" : "text-zinc-400"}`}
-                                title={order.slipImage ? "View Slip" : "View Details"}
-                                onClick={() => handleViewAction(order)}
+                              variant="ghost"
+                              size="icon"
+                              className={`h-8 w-8 ${order.slipImage ? "text-blue-600 hover:text-blue-700 hover:bg-blue-50" : "text-zinc-400"}`}
+                              title={order.slipImage ? "View Slip" : "View Details"}
+                              onClick={() => handleViewAction(order)}
                             >
-                                <Eye className="w-4 h-4" />
+                              <Eye className="w-4 h-4" />
                             </Button>
-                            )}
+                          )}
                         </div>
                       </TableCell>
                     </TableRow>
@@ -344,36 +374,37 @@ export default function OrderHistoryPage() {
             <DialogTitle>Upload Payment Slip (Order #{selectedOrderId})</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
-             <div 
-                className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors h-64 relative"
-                onClick={() => fileInputRef.current?.click()}
-             >
-                {slipPreview ? (
-                    <>
-                        <img src={slipPreview} alt="Slip Preview" className="w-full h-full object-contain rounded-md" />
-                        <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity rounded-md">
-                            <p className="text-white font-medium">Click to change</p>
-                        </div>
-                    </>
-                ) : (
-                    <div className="flex flex-col items-center text-zinc-400 gap-2">
-                        <ImageIcon className="w-10 h-10" />
-                        <span className="text-sm">Click to upload slip image</span>
-                    </div>
-                )}
-                <input 
-                    type="file" 
-                    ref={fileInputRef} 
-                    className="hidden" 
-                    accept="image/*" 
-                    onChange={handleFileChange} 
-                />
-             </div>
+            <div
+              className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors h-64 relative"
+              onClick={() => fileInputRef.current?.click()}
+            >
+              {slipPreview ? (
+                <>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={slipPreview} alt="Slip Preview" className="w-full h-full object-contain rounded-md" />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 hover:opacity-100 flex items-center justify-center transition-opacity rounded-md">
+                    <p className="text-white font-medium">Click to change</p>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col items-center text-zinc-400 gap-2">
+                  <ImageIcon className="w-10 h-10" />
+                  <span className="text-sm">Click to upload slip image</span>
+                </div>
+              )}
+              <input
+                type="file"
+                ref={fileInputRef}
+                className="hidden"
+                accept="image/*"
+                onChange={handleFileChange}
+              />
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsUploadModalOpen(false)}>Cancel</Button>
             <Button onClick={handleUploadSlip} disabled={isUploading || !slipFile}>
-                {isUploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading...</> : "Upload"}
+              {isUploading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Uploading...</> : "Upload"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -381,25 +412,25 @@ export default function OrderHistoryPage() {
 
       {/* --- View Slip Modal --- */}
       <Dialog open={isViewSlipOpen} onOpenChange={setIsViewSlipOpen}>
-          <DialogContent className="sm:max-w-lg p-0 overflow-hidden bg-black/90 border-none">
-              <div className="relative w-full h-[80vh] flex items-center justify-center">
-                  {viewSlipUrl && (
-                      <img 
-                        src={viewSlipUrl} 
-                        alt="Payment Slip" 
-                        className="max-w-full max-h-full object-contain"
-                      />
-                  )}
-                  <button 
-                    onClick={() => setIsViewSlipOpen(false)}
-                    className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white rounded-full p-2 backdrop-blur-sm transition-colors"
-                  >
-                      <X className="w-5 h-5" />
-                  </button>
-              </div>
-          </DialogContent>
+        <DialogContent className="sm:max-w-lg p-0 overflow-hidden bg-black/90 border-none">
+          <div className="relative w-full h-[80vh] flex items-center justify-center">
+            {viewSlipUrl && (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={viewSlipUrl}
+                alt="Payment Slip"
+                className="max-w-full max-h-full object-contain"
+              />
+            )}
+            <button
+              onClick={() => setIsViewSlipOpen(false)}
+              className="absolute top-4 right-4 bg-white/20 hover:bg-white/40 text-white rounded-full p-2 backdrop-blur-sm transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+        </DialogContent>
       </Dialog>
-
     </div>
   );
 }

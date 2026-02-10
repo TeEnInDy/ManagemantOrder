@@ -15,12 +15,23 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 4000;
 
-// Middleware
-app.use(cors()); // อนุญาตให้ Frontend ยิงเข้ามาได้
+// ================= MIDDLEWARE =================
+// ✅ แก้ไข CORS ตรงนี้ครับ
+app.use(cors({
+    origin: [
+        "http://localhost:3000",      // Next.js (Run แบบ npm run dev)
+        "http://localhost:9099",      // Docker (Localhost)
+        "http://dekdee2.informatics.buu.ac.th:9099" // Server มหาลัย (IP/Domain จริง)
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH"],
+    credentials: true // อนุญาตให้ส่ง Cookie/Auth Header
+}));
+
 app.use(express.json()); // อ่าน JSON body
 
 // ================= ROUTES =================
 app.use('/api/auth', authRoutes); // login
+
 // 1. สินค้า (Menu)
 app.use('/api/products', productRoutes);
 
@@ -34,9 +45,11 @@ app.use('/api/stocks', stockRoutes);
 app.use('/api/transactions', transactionRoutes);
 
 // 5. โฟลเดอร์รูปภาพ (Static Files)
+// หมายเหตุ: ตรวจสอบ path ให้ดีว่าโฟลเดอร์ uploads อยู่ที่ไหน
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
-app.use('/uploads', express.static(path.join(__dirname, '../Asset/uploads')));
-// หมายเหตุ: ตรวจสอบว่าโฟลเดอร์ Asset อยู่ระดับเดียวกับ src หรือ folder นอกสุด
+// app.use('/uploads', express.static(path.join(__dirname, '../Asset/uploads')));
+
+// จัดการ Static Files อื่นๆ (ถ้ามี)
 const assetPath = path.resolve(__dirname, '..', 'Asset');
 app.use('/Asset', express.static(assetPath));
 
@@ -48,8 +61,4 @@ app.get('/', (req: Request, res: Response) => {
 // ================= START SERVER =================
 app.listen(PORT, () => {
     console.log(`🚀 Backend Server running at http://localhost:${PORT}`);
-    // console.log(`- Products:     http://localhost:${PORT}/api/products`);
-    // console.log(`- Orders:       http://localhost:${PORT}/api/orders`);
-    // console.log(`- Stocks:       http://localhost:${PORT}/api/stocks`);
-    // console.log(`- Transactions: http://localhost:${PORT}/api/transactions`);
 });

@@ -2,7 +2,8 @@
 
 import React, { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useRouter } from "next/navigation";
-import axios from "axios";
+// ✅ เปลี่ยนมาใช้ api และ SERVER_URL
+import { api, SERVER_URL } from "@/lib/axios";
 import { Navbar } from "@/components/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,7 +25,6 @@ import {
 } from "@/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  // ✅ ต้อง import ให้ครบตามนี้ครับ
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogTrigger, DialogDescription
 } from "@/components/ui/dialog";
 import {
@@ -32,7 +32,6 @@ import {
   Calendar, Loader2, ChevronRight, PlusCircle, UploadCloud, X, Eye
 } from "lucide-react";
 
-// ... (Types และตัวแปรอื่นๆ เหมือนเดิม)
 interface Transaction {
   id: number;
   type: "INCOME" | "EXPENSE";
@@ -43,9 +42,8 @@ interface Transaction {
   createdAt: string;
 }
 
-const BACKEND_URL = "http://localhost:4000";
+// ❌ ลบ const BACKEND_URL ทิ้งไปเลย
 
-// ... (Helper function getWeeksInMonth เหมือนเดิม)
 const getWeeksInMonth = (month: number, year: number) => {
   const weeks = [];
   const firstDate = new Date(year, month - 1, 1);
@@ -70,7 +68,6 @@ const getWeeksInMonth = (month: number, year: number) => {
 export default function TransactionsPage() {
   const router = useRouter();
 
-  // ... (States เดิมทั้งหมด)
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [filteredTx, setFilteredTx] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
@@ -118,7 +115,8 @@ export default function TransactionsPage() {
     try {
       setLoading(true);
       const params = buildQueryParams();
-      const res = await axios.get<any>(`${BACKEND_URL}/api/transactions?${params.toString()}`);
+      // ✅ ใช้ api.get (ไม่ต้องมี /api เพราะ baseURL มีแล้ว)
+      const res = await api.get<any>(`/transactions?${params.toString()}`);
       const sorted = res.data.history.sort((a: any, b: any) =>
         new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
       );
@@ -149,11 +147,43 @@ export default function TransactionsPage() {
 
   // --- Handlers ---
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-      setSelectedFile(file);
-      setPreviewUrl(URL.createObjectURL(file));
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const heic2any = (await import("heic2any")).default;
+    const file = e.target.files?.[0];
+
+    if (file) {
+      let fileToProcess = file;
+
+      // 🔍 ตรวจสอบและแปลงไฟล์ HEIC สำหรับหน้า Transactions
+      if (file.name.toLowerCase().endsWith(".heic") || file.type === "image/heic") {
+        try {
+          console.log("🔄 Detecting HEIC slip, converting...");
+          const convertedBlob = await heic2any({
+            blob: file,
+            toType: "image/jpeg",
+            quality: 0.8,
+          });
+
+          const blob = Array.isArray(convertedBlob) ? convertedBlob[0] : convertedBlob;
+
+          fileToProcess = new File(
+            [blob],
+            file.name.replace(/\.heic$/i, ".jpg"),
+            { type: "image/jpeg" }
+          );
+          console.log("✅ Slip converted to JPG!");
+        } catch (error) {
+          console.error("❌ Failed to convert HEIC:", error);
+          alert("ไม่สามารถแปลงไฟล์ HEIC ได้ กรุณาใช้ไฟล์ JPG/PNG");
+          return;
+        }
+      }
+
+      // ✅ เก็บไฟล์ลง State เพื่อเตรียมส่งให้ Backend
+      setSelectedFile(fileToProcess);
+
+      // สร้าง Preview (ใช้ URL.createObjectURL ก็ได้ หรือ FileReader ก็ได้)
+      setPreviewUrl(URL.createObjectURL(fileToProcess));
     }
   };
 
@@ -171,7 +201,8 @@ export default function TransactionsPage() {
       formData.append("description", withdrawForm.description);
       if (selectedFile) formData.append("image", selectedFile);
 
-      await axios.post(`${BACKEND_URL}/api/transactions`, formData, {
+      // ✅ ใช้ api.post
+      await api.post(`/transactions`, formData, {
         headers: { "Content-Type": "multipart/form-data" },
       });
 
@@ -192,27 +223,16 @@ export default function TransactionsPage() {
   const handleViewSlip = (slipImage: string) => {
     if (slipImage) {
       let fullUrl = slipImage;
-      // 🛠️ แก้ไข Logic การสร้าง URL ให้ครอบคลุมทุกเคส
+      // ✅ ใช้ SERVER_URL แทน BACKEND_URL
       if (!slipImage.startsWith("http")) {
-        // 1. เปลี่ยน Backslash (\) เป็น Slash (/) เผื่อมาจาก Windows
         let cleanPath = slipImage.replace(/\\/g, '/');
-
-        // 2. ถ้าไม่มี / นำหน้า ให้เติม
         if (!cleanPath.startsWith('/')) {
           cleanPath = `/${cleanPath}`;
         }
-
-        // 3. ต่อ String กับ Backend URL
-        // (Database อาจเก็บ /uploads/slips/xxx.jpg หรือ uploads/slips/xxx.jpg)
-        // เช็คว่าใน path มีคำว่า uploads ซ้ำไหม ถ้ามีให้ตัดออกตัวนึง
-        if (cleanPath.startsWith('/uploads/') && BACKEND_URL.endsWith('/')) {
-          // กรณีกันพลาด (ไม่น่าเกิดถ้าวางระบบดี)
-        }
-
-        fullUrl = `${BACKEND_URL}${cleanPath}`;
+        fullUrl = `${SERVER_URL}${cleanPath}`;
       }
 
-      console.log("Opening Slip URL:", fullUrl); // 👈 ดู Log ใน Console ได้เลยถ้ารูปไม่ขึ้น
+      console.log("Opening Slip URL:", fullUrl);
       setViewSlipUrl(fullUrl);
       setIsViewSlipOpen(true);
     }
@@ -221,18 +241,22 @@ export default function TransactionsPage() {
   const handleSyncData = async () => {
     if (!confirm("⚠️ ต้องการ Sync ข้อมูลบัญชีกับสต็อกใหม่หรือไม่?")) return;
     try {
-      await axios.post(`${BACKEND_URL}/api/transactions/fix-data`);
+      // ✅ ใช้ api.post
+      await api.post(`/transactions/fix-data`);
       alert("Sync Completed!");
       fetchTransactions();
     } catch (e) { alert("Sync Failed"); }
   };
 
   const handleNavigation = (tab: string) => {
-    if (tab === "New Order") router.push("/order");
-    else if (tab === "Dashboard") router.push("/dashboard");
-    else if (tab === "Order History") router.push("/order-history");
-    else if (tab === "Stock") router.push("/stock");
-    else if (tab === "Transactions") router.push("/reports");
+    const routes: Record<string, string> = {
+      "New Order": "/",
+      Dashboard: "/dashboard",
+      "Order History": "/order-history",
+      Stock: "/stock",
+      Transactions: "/reports",
+    };
+    if (routes[tab]) router.push(routes[tab]);
   };
 
   return (
@@ -242,7 +266,7 @@ export default function TransactionsPage() {
       </div>
 
       <main className="container mx-auto p-6 md:p-8 space-y-6">
-        {/* Header & Filters (เหมือนเดิม) */}
+        {/* Header & Filters */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <div>
             <h2 className="text-3xl font-bold text-zinc-900 dark:text-zinc-50">Transaction History</h2>
@@ -252,13 +276,15 @@ export default function TransactionsPage() {
             <Button variant="outline" className="gap-2 text-orange-600 border-orange-200" onClick={handleSyncData}>
               <Wrench className="w-4 h-4" /> Fix Data
             </Button>
+            {/* ✅ แก้ Link Export PDF ให้ใช้ SERVER_URL */}
             <Button className="gap-2 bg-blue-600 hover:bg-blue-700 text-white"
-              onClick={() => window.open(`${BACKEND_URL}/api/transactions/export-pdf?${buildQueryParams().toString()}`, "_blank")}>
+              onClick={() => window.open(`${SERVER_URL}/api/transactions/export-pdf?${buildQueryParams().toString()}`, "_blank")}>
               <Download className="w-4 h-4" /> Export PDF
             </Button>
           </div>
         </div>
 
+        {/* ... (UI ส่วน Filter เหมือนเดิม) ... */}
         <div className="bg-white dark:bg-zinc-900 p-4 rounded-xl border shadow-sm space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <Tabs value={filterMode} onValueChange={setFilterMode} className="w-auto">
@@ -319,7 +345,6 @@ export default function TransactionsPage() {
               <DialogHeader>
                 <DialogTitle>บันทึกการเบิกจ่าย (Expense)</DialogTitle>
               </DialogHeader>
-              {/* ... (Form Withdraw เหมือนเดิม) ... */}
               <div className="grid gap-4 py-4">
                 <div className="grid grid-cols-4 items-center gap-4">
                   <Label className="text-right">Amount</Label>
@@ -418,11 +443,8 @@ export default function TransactionsPage() {
         </div>
       </main>
 
-      {/* 🔴 แก้ไข: View Slip Modal (เพิ่ม DialogHeader/Title แต่ซ่อนไว้) */}
       <Dialog open={isViewSlipOpen} onOpenChange={setIsViewSlipOpen}>
         <DialogContent className="sm:max-w-lg p-0 overflow-hidden bg-black/90 border-none">
-
-          {/* ✅ เพิ่มส่วนนี้เพื่อแก้ Error Accessibility */}
           <DialogHeader className="sr-only">
             <DialogTitle>View Payment Slip</DialogTitle>
             <DialogDescription>Image preview of the transaction slip</DialogDescription>
@@ -436,7 +458,6 @@ export default function TransactionsPage() {
                 alt="Payment Slip"
                 className="max-w-full max-h-full object-contain"
                 onError={(e) => {
-                  // ถ้าโหลดรูปไม่ขึ้น ให้แสดง placeholder หรือแจ้งเตือน
                   e.currentTarget.style.display = 'none';
                   alert(`ไม่สามารถโหลดรูปภาพได้: ${viewSlipUrl}`);
                 }}
